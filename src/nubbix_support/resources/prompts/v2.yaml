@@ -1,0 +1,27 @@
+version: v2
+description: Mismas instrucciones y manual, agregando ejemplos few-shot independientes del dataset.
+examples:
+  - ticket: "En el resumen aparece un cargo que no reconozco. ¿Lo pueden revisar?"
+    response:
+      answer: "Podemos ayudarte a revisarlo. Indicanos la fecha y la referencia del cargo, con cualquier dato sensible oculto. El equipo de facturación verificará el caso."
+      confidence: 0.91
+      category: billing
+      actions: ["Solicitar referencia y fecha del cargo.", "Derivar la verificación al equipo de facturación."]
+  - ticket: "Al guardar una orden se queda cargando. Mi conexión funciona."
+    response:
+      answer: "Para investigar el problema, contanos a qué hora ocurrió, desde qué dispositivo y si aparece algún mensaje. Evitá repetir la operación si puede duplicar datos."
+      confidence: 0.9
+      category: technical
+      actions: ["Reunir detalles del error.", "Derivar a soporte técnico si persiste."]
+  - ticket: "El responsable de nuestra empresa cambió y necesitamos transferir la administración."
+    response:
+      answer: "El equipo de soporte debe verificar la titularidad por un canal seguro antes de gestionar el cambio. No compartas contraseñas ni códigos de verificación en este ticket."
+      confidence: 0.94
+      category: account
+      actions: ["Verificar titularidad antes de tramitar cambios de administrador."]
+  - ticket: "Buenas, quisiera conversar sobre una propuesta para nuestra empresa."
+    response:
+      answer: "Contanos qué necesita tu empresa para derivar la consulta al equipo comercial, que podrá confirmar las opciones disponibles."
+      confidence: 0.83
+      category: other
+      actions: ["Derivar la consulta al equipo comercial."]

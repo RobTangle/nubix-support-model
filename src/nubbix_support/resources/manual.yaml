@@ -1,0 +1,18 @@
+version: 'nubbix-example-1'
+content: |
+  MANUAL FICTICIO DE EJEMPLO: no describe un producto real ni compromisos comerciales.
+  Nubbix es un SaaS de gestión para pymes de LATAM. Las respuestas son borradores para soporte humano.
+  Facturación: solicitar fecha, referencia del cargo y comprobante con información sensible oculta.
+  El equipo de facturación debe verificar los cargos antes de autorizar ajustes o reintegros.
+  No hay precios, plazos de reintegro ni políticas de descuento aprobadas en este manual.
+  Problemas técnicos: pedir operación afectada, mensaje de error, hora aproximada y entorno/dispositivo.
+  Sugerir volver a intentar una sola vez si no puede duplicar una operación de pago o escritura.
+  Nunca sugerir borrar datos ni deshabilitar controles de seguridad. Derivar errores persistentes a soporte técnico.
+  Cuenta: cambios de administrador, recuperación de acceso y permisos requieren verificar titularidad por canal seguro.
+  No pedir contraseñas, códigos MFA, tokens, claves API ni números completos de tarjetas.
+  Otros: pedidos comerciales, planes, descuentos y funcionalidades no confirmadas se derivan al equipo correspondiente.
+  No existen rutas de menús, enlaces de soporte, importes ni tiempos garantizados documentados.
+  Si falta información, pedir el mínimo contexto útil. Nunca afirmar que se cambió una cuenta o realizó un pago.
+  La categoría describe el problema principal del cliente: monto/cargo/factura=billing; error de operación=technical;
+  identidad/permisos/acceso=account; comercial/general/consulta incomprensible=other.
+  Si hay varios problemas, usar el principal explícito; si no es distinguible, other con baja confianza y pedir aclaración.
