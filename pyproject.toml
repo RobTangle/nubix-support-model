@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nubbix-support"
+version = "0.1.0"
+description = "Clasificación y propuestas de soporte con IA, seguridad y evaluaciones."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "openai>=2.0,<3",
+  "xai-sdk>=1.0,<2",
+  "pydantic>=2.12,<3",
+  "pydantic-settings>=2.10,<3",
+  "PyYAML>=6.0,<7",
+  "typer>=0.20,<1",
+  "grpcio>=1.84,<2",
+  "opentelemetry-api>=1.45,<2",
+]
+
+[project.scripts]
+nubbix-support = "nubbix_support.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.4,<10", "pytest-cov>=6,<8", "ruff>=0.14,<1", "mypy>=1.18,<2", "types-PyYAML>=6", "build>=1.3,<2", "httpx>=0.28,<1", "opentelemetry-sdk>=1.45,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nubbix_support"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "docs", ".github", "pyproject.toml", "uv.lock", "README.md", ".env.example", ".python-version", ".gitignore"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".tools", ".uv-cache", ".superpowers"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/nubbix_support"]
+
+[[tool.mypy.overrides]]
+module = ["xai_sdk.*", "grpc.*"]
+ignore_missing_imports = true

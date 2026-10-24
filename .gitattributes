@@ -1,0 +1,2 @@
+# Mantener diffs consistentes entre Windows y Linux, sin cambiar la configuración global.
+* text=auto eol=lf
