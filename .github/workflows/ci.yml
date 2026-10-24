@@ -1,0 +1,82 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Python 3.12 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Run offline tests
+        run: uv run pytest
+      - name: Check lint
+        run: uv run ruff check .
+      - name: Check types
+        run: uv run mypy
+      - name: Build distributions
+        run: uv build
+      - name: Install wheel and check resources outside the repository
+        shell: python {0}
+        run: |
+          import os
+          import pathlib
+          import subprocess
+          import tempfile
+
+          root = pathlib.Path.cwd()
+          wheel = next((root / "dist").glob("*.whl"))
+          with tempfile.TemporaryDirectory(prefix="nubbix-wheel-") as temporary:
+              destination = pathlib.Path(temporary)
+              environment = os.environ.copy()
+              for name in list(environment):
+                  if name.startswith("NUBBIX_") or name in (
+                      "OPENAI_API_KEY", "XAI_API_KEY", "PYTHONPATH", "PYTHONHOME"
+                  ):
+                      environment.pop(name, None)
+              environment["UV_PROJECT_ENVIRONMENT"] = str(destination / "venv")
+              subprocess.run(
+                  ["uv", "sync", "--locked", "--no-dev", "--no-install-project"],
+                  env=environment,
+                  check=True,
+              )
+              interpreter = destination / "venv" / (
+                  "Scripts/python.exe" if os.name == "nt" else "bin/python"
+              )
+              subprocess.run(
+                  ["uv", "pip", "install", "--python", str(interpreter), "--no-deps", str(wheel)],
+                  env=environment,
+                  check=True,
+              )
+              smoke = (
+                  "from nubbix_support.prompts import PromptRepository; "
+                  "from nubbix_support.budget import load_prices; "
+                  "prompts = PromptRepository(); "
+                  "assert prompts.support('v1'); "
+                  "assert prompts.load('v2').examples; "
+                  "assert load_prices().get('openai', 'gpt-6-luna'); "
+                  "from nubbix_support.cli import main; main()"
+              )
+              subprocess.run(
+                  [str(interpreter), "-I", "-c", smoke, "--help"],
+                  cwd=destination,
+                  env=environment,
+                  check=True,
+              )
