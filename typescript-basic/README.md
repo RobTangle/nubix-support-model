@@ -77,6 +77,10 @@ En **Evaluaciones**, elegí proveedor y operación: `run` (60 casos), `compare` 
 
 **¿Qué es `reservation`?** Antes de cada llamada, el presupuesto compromete una estimación conservadora de tokens de entrada y salida máxima. Cuando llega el consumo, lo concilia y libera el excedente. Si una llamada falla sin informar uso, mantiene una reserva desconocida para no asumir costo cero. Es contabilidad local, no una retención o cobro del proveedor; el límite no garantiza la factura final.
 
+La navegación separa **Probar ticket**, **Evaluaciones**, **Historial** y **Guía de uso**. Las vistas conservan el estado mientras están montadas. Los resultados muestran métricas, categorías y criterios legibles; los casos tienen filtros y rúbricas de revisión humana, con JSON como detalle técnico. Las anotaciones no se pierden durante el polling, pero hay que guardarlas antes de abrir otro trabajo o recargar.
+
+Consultá la [guía de uso del laboratorio](../docs/lab-user-guide.md) para seguir un ticket, comparar prompts y revisar resultados.
+
 Leé el [recorrido de observabilidad y HTTP](../docs/live-observability.md) para entender las clases, los contratos y los límites de esta primera versión.
 
 ## Archivo de pruebas manuales

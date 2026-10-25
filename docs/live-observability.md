@@ -2,6 +2,8 @@
 
 Esta versión agrega una interfaz HTTP local al mismo servicio TypeScript de soporte. Los eventos describen hechos del backend; la pantalla no reconstruye pasos mediante tiempos inventados. No incorpora un LLM juez a las evaluaciones.
 
+La [guía de uso](lab-user-guide.md) explica las cuatro vistas, los controles, los reportes y la revisión humana. La navegación conserva el DOM y no interrumpe trabajos; `LabNavigation` sólo cambia la vista visible, sin conocer la lógica de soporte. `HistoryView` presenta registros y `EvaluationView` conserva nodos por caso para no borrar anotaciones durante las actualizaciones.
+
 ## Ejecutar el panel
 
 Desde `typescript-basic`:
@@ -61,7 +63,7 @@ flowchart TD
   VIEW --> HUMAN["HUMANO: inspeccionar detalles y estudiar el resultado"]
 ```
 
-Los actores azules del panel representan operaciones al proveedor; en demo ese proveedor es un doble identificado. Los eventos grises son operaciones locales. `human_review.suggested` sólo informa que se añadió una sugerencia: ninguna persona revisó automáticamente ese ticket.
+Las etiquetas **LLM · REQUEST** del panel representan operaciones al proveedor; en demo ese proveedor es un doble identificado. Los eventos grises son operaciones locales. `human_review.suggested` sólo informa que se añadió una sugerencia: ninguna persona revisó automáticamente ese ticket.
 
 ## Separación de responsabilidades
 
