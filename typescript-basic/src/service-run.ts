@@ -7,6 +7,7 @@
  * con un único flujo podría mantener este código dentro de service.ts.
  */
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { Budget } from './budget.js';
 import { AppError } from './errors.js';
 import {
@@ -19,12 +20,14 @@ import { runtimeSettingsSchema } from './runtime-settings.js';
 import {
   HUMAN_REVIEW_ACTION,
   supportResponseSchema,
+  ticketSchema,
   type SupportResponse,
   type Ticket,
 } from './schemas.js';
 import type { RunTrace } from './telemetry.js';
 import { emitWithinDeadline } from './telemetry.js';
 import { RunObserver } from './observability/run-observer.js';
+import { RunInspection } from './inspection/run-inspection.js';
 import { finishObservedRun, validateObservedTicket } from './observability/lifecycle.js';
 
 /** Resultado completo de un ticket: respuesta pública y datos operativos de su ejecución. */
@@ -125,6 +128,7 @@ export async function runSession(
     deadline,
     signal,
     settings,
+    inspector: new RunInspection(trace.requestId, process.inspect, signal),
     observer: new RunObserver(
       {
         requestId: trace.requestId,
@@ -142,7 +146,13 @@ export async function runSession(
   let failure: AppError | undefined;
   try {
     await context.observer.emit('request.received');
+    await context.inspector.record('input.received', input);
     const ticket = await validateObservedTicket(input, context.observer);
+    await context.inspector.record('input.validated', {
+      input: ticket,
+      schema: z.toJSONSchema(ticketSchema),
+      localRules: { maxUnicodePointsBeforeTrim: 8000, trim: true, rejectEmptyAfterTrim: true },
+    });
     signal.throwIfAborted();
     const result = await workflow(ticket, new StructuredExecutor(options), context);
     signal.throwIfAborted();

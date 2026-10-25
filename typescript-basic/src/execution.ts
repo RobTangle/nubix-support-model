@@ -16,6 +16,8 @@ import type { FlowSink } from './observability/events.js';
 import type { RunObserver } from './observability/run-observer.js';
 import { AttemptObserver } from './observability/attempt-observer.js';
 import { recordObservedAttempt } from './observability/lifecycle.js';
+import type { InspectionSink } from './inspection/contracts.js';
+import type { RunInspection } from './inspection/run-inspection.js';
 
 /** Dependencias compartibles: cliente, prompts, precios y políticas generales del asistente. */
 export interface AssistantOptions {
@@ -36,6 +38,7 @@ export interface ProcessOptions {
   capture?: (output: CapturedOutput) => void;
   observe?: FlowSink;
   requestId?: string;
+  inspect?: InspectionSink;
 }
 /** Estado de un ticket compartido por sus etapas: deadline es un instante del reloj monotónico. */
 export interface ExecutionContext {
@@ -46,6 +49,7 @@ export interface ExecutionContext {
   settings: RuntimeSettings;
   capture?: (output: CapturedOutput) => void;
   observer: RunObserver;
+  inspector: RunInspection;
 }
 
 /**
@@ -103,7 +107,7 @@ export class StructuredExecutor {
       let outcome: T | null = null;
       let failure: AppError | null = null;
       let status = 'valid';
-      const observation = new AttemptObserver(context.observer, stage, attempt);
+      const observation = new AttemptObserver(context.observer, stage, attempt, context.inspector);
       try {
         signal.throwIfAborted();
         const result = await observation.complete(
