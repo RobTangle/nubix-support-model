@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { labRunDetailSchema, labRunListSchema } from '../../lab/contracts.js';
+import {
+  labRunDetailSchema,
+  labRunListSchema,
+  labHistoryQuerySchema,
+  type LabHistoryQuery,
+} from '../../lab/contracts.js';
 
 // El navegador valida la estructura necesaria sin importar el runner ni módulos de Node.
 const jsonObject = z.record(z.string(), z.json());
@@ -80,9 +85,19 @@ export interface ReviewInput {
 export class LabApi {
   constructor(private readonly request: typeof fetch = (input, init) => fetch(input, init)) {}
 
-  async history(kind: 'support' | 'evaluation', limit = 30, offset = 0, signal?: AbortSignal) {
+  async history(input: LabHistoryQuery, signal?: AbortSignal) {
+    const { kind, limit, offset, includeEvaluationCases, ...filters } =
+      labHistoryQuerySchema.parse(input);
+    const query = new URLSearchParams({
+      ...(kind ? { kind } : {}),
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (includeEvaluationCases) query.set('includeEvaluationCases', 'true');
+    for (const [key, value] of Object.entries(filters))
+      if (value !== undefined) query.set(key, value);
     return labRunListSchema.parse(
-      await this.json(`/api/history?kind=${kind}&limit=${limit}&offset=${offset}`, {
+      await this.json(`/api/history?${query}`, {
         ...(signal ? { signal } : {}),
       }),
     );

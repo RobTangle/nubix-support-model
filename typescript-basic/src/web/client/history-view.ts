@@ -15,14 +15,15 @@ export class HistoryView {
     private readonly open: (id: string, kind: LabRunSummary['kind']) => void,
   ) {}
 
-  render(items: LabRunSummary[]): void {
+  render(items: LabRunSummary[], filtered = false): void {
     const document = this.container.ownerDocument;
     this.container.replaceChildren();
     if (!items.length) {
       const empty = document.createElement('p');
       empty.className = 'empty-state';
-      empty.textContent =
-        'Todavía no hay ejecuciones de este tipo. Probá un ticket o iniciá una evaluación para guardar evidencia aquí.';
+      empty.textContent = filtered
+        ? 'No hay ejecuciones que coincidan con estos filtros. Cambiá la selección o usá Limpiar filtros.'
+        : 'Todavía no hay ejecuciones de este tipo. Probá un ticket o iniciá una evaluación para guardar evidencia aquí.';
       this.container.append(empty);
     }
     for (const item of items) {

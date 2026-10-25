@@ -301,14 +301,56 @@ Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar l
           </div>
           <section class="panel" aria-labelledby="history-title">
             <h2 id="history-title">Ejecuciones guardadas</h2>
-            <div class="history-controls">
-              <label for="history-kind">Tipo de ejecución</label
-              ><select id="history-kind">
-                <option value="support">Tickets de soporte</option>
-                <option value="evaluation">Evaluaciones</option></select
-              ><button id="history-refresh" class="secondary-button" type="button">
-                Actualizar
-              </button>
+            <div class="history-filters" role="group" aria-label="Filtros del historial">
+              <label
+                >Tipo de ejecución<select id="history-kind">
+                  <option value="support">Tickets de soporte</option>
+                  <option value="evaluation">Evaluaciones</option>
+                </select></label
+              >
+              <label
+                >Proveedor<select id="history-provider">
+                  <option value="">Todos los proveedores</option>
+                </select></label
+              >
+              <label
+                >Versión de prompt<select id="history-prompt">
+                  <option value="">Todas las versiones</option>
+                </select></label
+              >
+              <label
+                >Estado<select id="history-status-filter">
+                  <option value="">Todos los estados</option>
+                  <option value="running">En curso</option>
+                  <option value="completed">Completada</option>
+                  <option value="failed">Fallida</option>
+                  <option value="cancelled">Cancelada</option>
+                  <option value="interrupted">Interrumpida</option>
+                </select></label
+              >
+              <label
+                >Modalidad<select id="history-mode">
+                  <option value="">LIVE y DEMO</option>
+                  <option value="live">LIVE · API real</option>
+                  <option value="demo">DEMO · simulada</option>
+                </select></label
+              >
+            </div>
+            <label id="history-origin" class="checkbox-label"
+              ><input
+                id="history-include-evaluations"
+                type="checkbox"
+                aria-describedby="history-scope"
+              />Incluir casos de evaluación</label
+            >
+            <p id="history-scope" class="field-help">
+              Sólo tickets independientes. Los casos siguen accesibles desde sus reportes.
+            </p>
+            <div class="history-filter-actions">
+              <button id="history-refresh" class="secondary-button" type="button">Actualizar</button
+              ><button id="history-clear" class="secondary-button" type="button">
+                Limpiar filtros</button
+              ><span class="field-help">Los filtros se aplican al cambiar y no consumen API.</span>
             </div>
             <p id="history-status" role="status" aria-live="polite">Conectando…</p>
             <div id="history-list" class="history-list" aria-label="Ejecuciones guardadas"></div>

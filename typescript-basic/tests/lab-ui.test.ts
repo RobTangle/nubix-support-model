@@ -105,7 +105,7 @@ test('laboratorio: consultar historial y reabrir evaluación sólo envía GET, s
       selection: null,
     });
   });
-  assert.equal((await api.history('evaluation', 30, 30)).total, 32);
+  assert.equal((await api.history({ kind: 'evaluation', limit: 30, offset: 30 })).total, 32);
   assert.equal((await api.detail(id)).mode, 'live');
   assert.equal((await api.evaluation(id, new AbortController().signal)).job.status, 'completed');
   assert.deepEqual(requests, [

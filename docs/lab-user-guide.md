@@ -60,7 +60,13 @@ Las señales por regex y las salidas inseguras intermedias son evidencia para in
 
 ## Consultar el historial
 
-Elegí tickets o evaluaciones. Las tarjetas muestran estado, modalidad, proveedor/modelo, prompt, fecha local e ID abreviado. Los tickets procesados dentro de una evaluación se identifican como casos y muestran el trabajo al que pertenecen. Expandí **Identificador completo** si necesitás correlacionar logs. La paginación permite recorrer todos los registros. **Actualizar** relee SQLite; no inicia nuevas llamadas.
+Elegí tickets o evaluaciones. **Tickets de soporte muestra sólo tickets independientes por defecto.** Para ver también ejecuciones del dataset, activá **Incluir casos de evaluación**. Los casos conservan su etiqueta y trabajo de origen; también podés abrirlos desde cada reporte, aunque estén ocultos en el listado.
+
+Podés combinar filtros de **proveedor**, **versión de prompt**, **estado** y **modalidad LIVE/DEMO**. Se aplican al cambiar: el servidor filtra antes de paginar y calcula el total sobre el mismo conjunto. Cada cambio vuelve a la primera página. **Limpiar filtros** restaura los valores predeterminados sin cambiar el tipo de ejecución elegido; **Actualizar** conserva los filtros y relee los datos.
+
+Las opciones de proveedor y prompt se obtienen de todos los registros guardados, incluyendo versiones retiradas del registro actual. Elegir una versión histórica aquí sólo filtra evidencia; no la habilita para ejecutar nuevas consultas. Las opciones son globales, por lo que una combinación puede no tener coincidencias. Los filtros también se aplican a los trabajos de evaluación; el checkbox de casos sólo aparece para soporte.
+
+Las tarjetas muestran estado, modalidad, proveedor/modelo, prompt, fecha local e ID abreviado. Expandí **Identificador completo** si necesitás correlacionar logs. La paginación permite recorrer todos los registros. **Actualizar** relee SQLite; no inicia nuevas llamadas.
 
 Los datos viven en `typescript-basic/data/lab.sqlite`, configurable con `--database`. Los reportes de evaluaciones también se escriben en `typescript-basic/reports/lab-evals/`; las revisiones de la UI se guardan en SQLite. El contenido original se conserva aunque cambies los selectores de una consulta nueva.
 

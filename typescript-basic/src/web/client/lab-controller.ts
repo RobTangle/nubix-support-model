@@ -4,6 +4,7 @@ import { LabApi, type EvaluationInput } from './lab-api.js';
 import { EvaluationView } from './evaluation-view.js';
 import { populatePromptChoices, populatePromptOptions } from './prompt-options.js';
 import { HistoryView, runStatusLabels } from './history-view.js';
+import { HistoryFilters } from './history-filters.js';
 
 /** Historial y trabajos persistentes: abortar una lectura nunca cancela el trabajo del servidor. */
 export class LabController {
@@ -18,6 +19,7 @@ export class LabController {
   private cancellationRequested = false;
   private readonly evaluations: EvaluationView;
   private readonly history: HistoryView;
+  private readonly historyFilters: HistoryFilters;
 
   constructor(
     private readonly document: Document,
@@ -25,6 +27,7 @@ export class LabController {
     private readonly restore: (run: LabRunDetail) => void,
     private readonly navigate?: (view: 'support' | 'evaluations' | 'history' | 'guide') => void,
   ) {
+    this.historyFilters = new HistoryFilters(document);
     this.history = new HistoryView(this.element('#history-list'), (id, kind) => {
       void this.open(id, kind);
     });
@@ -89,7 +92,7 @@ export class LabController {
     this.element('#history-refresh').addEventListener('click', () => {
       void this.refresh();
     });
-    this.element('#history-kind').addEventListener('change', () => {
+    this.historyFilters.initialize(() => {
       this.offset = 0;
       void this.refresh();
     });
@@ -139,7 +142,14 @@ export class LabController {
         this.element<HTMLSelectElement>('#history-kind').value === 'evaluation'
           ? 'evaluation'
           : 'support';
-      const page = await this.api.history(kind, 30, this.offset, controller.signal);
+      const filters = this.historyFilters.read();
+      const filtered = Object.values(filters).some(
+        (value) => value !== undefined && value !== false,
+      );
+      const page = await this.api.history(
+        { kind, limit: 30, offset: this.offset, ...filters },
+        controller.signal,
+      );
       if (controller.signal.aborted || this.historyRequest !== controller) return;
       this.total = page.total;
       if (this.offset > 0 && this.offset >= page.total) {
@@ -147,10 +157,13 @@ export class LabController {
         await this.refresh();
         return;
       }
-      this.history.render(page.items);
+      this.historyFilters.populate(page.filterOptions);
+      this.history.render(page.items, filtered);
       status.textContent = page.total
         ? `${this.offset + 1}–${Math.min(this.offset + page.items.length, page.total)} de ${page.total} ejecuciones`
-        : 'Todavía no hay ejecuciones de este tipo.';
+        : filtered
+          ? 'No hay resultados con estos filtros. Podés limpiarlos para volver al listado predeterminado.'
+          : 'Todavía no hay ejecuciones de este tipo.';
       this.element<HTMLButtonElement>('#history-previous').disabled = this.offset === 0;
       this.element<HTMLButtonElement>('#history-next').disabled = this.offset + 30 >= page.total;
     } catch {
