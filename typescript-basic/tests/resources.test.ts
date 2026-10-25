@@ -16,7 +16,8 @@ test('build limpio: distribuye módulos y prompts por responsabilidad sin módul
     'costs/budget.js',
     'config/environment.js',
     'prompting/prompt-registry.yaml',
-    'prompting/resources/context.yaml',
+    'prompting/versions/basic-v1/context.yaml',
+    'prompting/versions/basic-v2/context.yaml',
     'observability/telemetry.js',
     'resources/read-shared.js',
     'cli.js',
@@ -31,6 +32,8 @@ test('build limpio: distribuye módulos y prompts por responsabilidad sin módul
     'prompt-registry.yaml',
     'config.js',
     'telemetry.js',
+    'prompting/prompt.yaml',
+    'prompting/resources/context.yaml',
   ])
     await assert.rejects(stat(new URL(`../dist/${path}`, import.meta.url)), { code: 'ENOENT' });
 });

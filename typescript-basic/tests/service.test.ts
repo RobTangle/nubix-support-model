@@ -38,12 +38,18 @@ function assistant(provider: LLMProvider, deadlineMs = 60_000) {
 
 test('default conserva instrucciones locales y v2 sólo agrega ejemplos independientes', async () => {
   const base = parse(
-    await readFile(new URL('../src/prompting/prompt.yaml', import.meta.url), 'utf8'),
+    await readFile(
+      new URL('../src/prompting/versions/basic-v1/system.yaml', import.meta.url),
+      'utf8',
+    ),
   ) as {
     system: string;
   };
   const context = parse(
-    await readFile(new URL('../src/prompting/resources/context.yaml', import.meta.url), 'utf8'),
+    await readFile(
+      new URL('../src/prompting/versions/basic-v1/context.yaml', import.meta.url),
+      'utf8',
+    ),
   ) as { manual: string };
   assert.equal(await loadPrompt(), base.system.replaceAll('{{manual}}', context.manual.trimEnd()));
   const v2 = await loadPrompts('basic-v2');

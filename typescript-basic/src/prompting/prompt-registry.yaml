@@ -1,13 +1,15 @@
-version: '1'
+version: '2'
 default: basic-v1
 baseline: basic-v1
-context: resources/context.yaml
-safety: resources/safety.yaml
 prompts:
   - id: basic-v1
     label: basic-v1 · contexto base
-    system: prompt.yaml
+    system: versions/basic-v1/system.yaml
+    context: versions/basic-v1/context.yaml
+    safety: versions/basic-v1/safety.yaml
   - id: basic-v2
     label: basic-v2 · contexto + cuatro ejemplos
-    system: prompt.yaml
-    examples: resources/basic-v2.yaml
+    system: versions/basic-v2/system.yaml
+    context: versions/basic-v2/context.yaml
+    safety: versions/basic-v2/safety.yaml
+    examples: versions/basic-v2/examples.yaml

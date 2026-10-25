@@ -43,7 +43,13 @@ try {
     'dist/resources/shared/prices.yaml',
     'dist/resources/shared/datasets/tickets.jsonl',
     'dist/resources/shared/datasets/adversarial.jsonl',
-    'dist/prompting/resources/safety.yaml',
+    'dist/prompting/versions/basic-v1/system.yaml',
+    'dist/prompting/versions/basic-v1/context.yaml',
+    'dist/prompting/versions/basic-v1/safety.yaml',
+    'dist/prompting/versions/basic-v2/system.yaml',
+    'dist/prompting/versions/basic-v2/context.yaml',
+    'dist/prompting/versions/basic-v2/safety.yaml',
+    'dist/prompting/versions/basic-v2/examples.yaml',
     'dist/web/public/index.html',
     'dist/web/public/app.js',
     'dist/web/public/styles.css',
@@ -103,13 +109,19 @@ try {
   const fixture = String.raw`
     import assert from 'node:assert/strict';
     const {SupportAssistant,loadPrompts,loadPrices,readRuntimeSettings,PromptRegistry}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'index.js')).href)});
-    const {readFile,writeFile}=await import('node:fs/promises');
+    const {readFile,writeFile,mkdir,copyFile}=await import('node:fs/promises');
     const {createRequire}=await import('node:module');
     const {parse,stringify}=createRequire(${JSON.stringify(join(installed, 'package.json'))})('yaml');
     const registryPath=${JSON.stringify(join(installed, 'dist', 'prompting', 'prompt-registry.yaml'))};
     const manifest=parse(await readFile(registryPath,'utf8'));
-    manifest.prompts.push({id:'smoke-v3',label:'Variante de empaquetado',system:'resources/smoke-v3.yaml'});
-    await writeFile(${JSON.stringify(join(installed, 'dist', 'prompting', 'resources', 'smoke-v3.yaml'))},stringify({version:'smoke-v3',system:'Clasificá la consulta y respetá el manual. {{manual}}'}));
+    const sourcePrompt=manifest.prompts[0];
+    manifest.prompts.push({id:'smoke-v3',label:'Variante de empaquetado',system:'versions/smoke-v3/system.yaml',context:'versions/smoke-v3/context.yaml',safety:'versions/smoke-v3/safety.yaml'});
+    const prompting=${JSON.stringify(join(installed, 'dist', 'prompting'))};
+    const {join}=await import('node:path');
+    await mkdir(join(prompting,'versions/smoke-v3'),{recursive:true});
+    await copyFile(join(prompting,sourcePrompt.context),join(prompting,'versions/smoke-v3/context.yaml'));
+    await copyFile(join(prompting,sourcePrompt.safety),join(prompting,'versions/smoke-v3/safety.yaml'));
+    await writeFile(join(prompting,'versions/smoke-v3/system.yaml'),stringify({version:'smoke-v3',system:'Clasificá la consulta y respetá el manual. {{manual}}'}));
     await writeFile(registryPath,stringify(manifest));
     const {pathToFileURL}=await import('node:url');
     const registry=await PromptRegistry.load(pathToFileURL(registryPath));

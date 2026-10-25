@@ -16,16 +16,23 @@ import type { PromptBundle } from './prompts.js';
 const text = z.string().min(1);
 // Rutas de recursos confiables, no configurables por tickets ni parámetros HTTP.
 const resourcePath = z.string().regex(/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.yaml$/u);
+const entrySchema = promptMetadataSchema
+  .extend({
+    system: resourcePath,
+    context: resourcePath,
+    safety: resourcePath,
+    examples: resourcePath.optional(),
+  })
+  .refine((entry) =>
+    [entry.system, entry.context, entry.safety, ...(entry.examples ? [entry.examples] : [])].every(
+      (path) => path.startsWith(`versions/${entry.id}/`),
+    ),
+  );
 const manifestSchema = z.strictObject({
   version: text,
   default: promptVersionSchema,
   baseline: promptVersionSchema,
-  context: resourcePath,
-  safety: resourcePath,
-  prompts: z
-    .array(promptMetadataSchema.extend({ system: resourcePath, examples: resourcePath.optional() }))
-    .min(1)
-    .max(100),
+  prompts: z.array(entrySchema).min(1).max(100),
 });
 const contextSchema = z.strictObject({ version: text, manual: text });
 const systemSchema = z.strictObject({ version: text, system: text });
@@ -47,7 +54,7 @@ type PreparedPrompt = { bundle: PromptBundle; marker: string };
 
 /**
  * Registro local validado y precargado: todas las referencias fallan antes de consumir API.
- * Cada versión elige instrucciones y ejemplos; manual y seguridad siguen compartidos.
+ * Cada versión conserva instrucciones, manual, seguridad y ejemplos en su propia carpeta.
  * El servicio recibe bundles listos y no necesita conocer archivos ni listas de versiones.
  */
 export class PromptRegistry {
@@ -83,32 +90,40 @@ export class PromptRegistry {
         throw new AppError('configuration_error');
       const root = await realpath(fileURLToPath(new URL('./', url)));
       const sources = new Map<string, string>();
-      const paths = new Set([
-        manifest.context,
-        manifest.safety,
-        ...manifest.prompts.flatMap((entry) => [
-          entry.system,
-          ...(entry.examples ? [entry.examples] : []),
-        ]),
-      ]);
-      for (const path of paths) {
+      const paths = new Map(
+        manifest.prompts.flatMap((entry) =>
+          [
+            entry.system,
+            entry.context,
+            entry.safety,
+            ...(entry.examples ? [entry.examples] : []),
+          ].map((path) => [path, entry.id] as const),
+        ),
+      );
+      const owners = new Map<string, string>();
+      for (const [path, owner] of paths) {
         const resolved = await realpath(fileURLToPath(new URL(path, url)));
         const inside = relative(root, resolved);
         if (isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`))
           throw new AppError('configuration_error');
+        // Un enlace interno tampoco debe volver a compartir archivos entre dos versiones.
+        const identity = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+        if (owners.has(identity) && owners.get(identity) !== owner)
+          throw new AppError('configuration_error');
+        owners.set(identity, owner);
         const content = await readFile(resolved, 'utf8');
         if (Buffer.byteLength(content) > 262144) throw new AppError('configuration_error');
         sources.set(path, content);
       }
-      const context = contextSchema.parse(parse(sources.get(manifest.context)!));
-      const safetySource = sources.get(manifest.safety)!;
-      const safety = safetySchema.parse(parse(safetySource));
-      const render = (template: string): string =>
-        template.replaceAll('{{manual}}', context.manual.trimEnd());
-      const inputModeration = render(safety.input);
-      const outputModeration = render(safety.output);
       const prepared = new Map<string, PreparedPrompt>();
       for (const entry of manifest.prompts) {
+        const context = contextSchema.parse(parse(sources.get(entry.context)!));
+        const safetySource = sources.get(entry.safety)!;
+        const safety = safetySchema.parse(parse(safetySource));
+        const render = (template: string): string =>
+          template.replaceAll('{{manual}}', context.manual.trimEnd());
+        const inputModeration = render(safety.input);
+        const outputModeration = render(safety.output);
         const template = systemSchema.parse(parse(sources.get(entry.system)!));
         const examplesSource = entry.examples ? sources.get(entry.examples)! : '';
         const examples = entry.examples

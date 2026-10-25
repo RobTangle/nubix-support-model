@@ -1,0 +1,9 @@
+version: manual-basic-v1
+manual: |
+  MANUAL FICTICIO DE EJEMPLO:
+  - Cargos duplicados: soporte debe verificar fecha y referencia antes de gestionar un ajuste.
+  - Facturas: pedir el período y derivar su verificación al equipo de facturación.
+  - Errores técnicos: pedir operación afectada, mensaje de error, hora y entorno/dispositivo.
+  - Acceso y permisos: verificar titularidad por un canal seguro antes de cambiar una cuenta.
+  - Planes y descuentos: derivar al equipo comercial sin prometer precios ni condiciones.
+  No hay rutas de menús, enlaces, importes ni plazos de resolución aprobados en este manual.

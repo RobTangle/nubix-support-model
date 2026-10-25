@@ -11,15 +11,20 @@ export async function extendedRegistry(directory: string): Promise<PromptRegistr
     version: string;
     default: string;
     baseline: string;
-    context: string;
-    safety: string;
-    prompts: { id: string; label: string; system: string; examples?: string }[];
+    prompts: {
+      id: string;
+      label: string;
+      system: string;
+      context: string;
+      safety: string;
+      examples?: string;
+    }[];
   };
   const paths = new Set([
-    manifest.context,
-    manifest.safety,
     ...manifest.prompts.flatMap((entry) => [
       entry.system,
+      entry.context,
+      entry.safety,
       ...(entry.examples ? [entry.examples] : []),
     ]),
   ]);
@@ -30,10 +35,21 @@ export async function extendedRegistry(directory: string): Promise<PromptRegistr
   manifest.prompts.push({
     id: 'experiment-v3',
     label: 'Tercera variante de prueba',
-    system: 'third.yaml',
+    system: 'versions/experiment-v3/system.yaml',
+    context: 'versions/experiment-v3/context.yaml',
+    safety: 'versions/experiment-v3/safety.yaml',
   });
+  await mkdir(join(directory, 'versions/experiment-v3'), { recursive: true });
+  await copyFile(
+    join(directory, manifest.prompts[0]!.context),
+    join(directory, 'versions/experiment-v3/context.yaml'),
+  );
+  await copyFile(
+    join(directory, manifest.prompts[0]!.safety),
+    join(directory, 'versions/experiment-v3/safety.yaml'),
+  );
   await writeFile(
-    join(directory, 'third.yaml'),
+    join(directory, 'versions/experiment-v3/system.yaml'),
     stringify({
       version: 'experiment-v3',
       system: 'Clasificá con prudencia y respondé con el manual. {{manual}}',
