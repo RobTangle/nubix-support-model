@@ -109,7 +109,7 @@ Cada etapa admite **dos intentos totales**, compartidos entre errores transitori
 
 El presupuesto estimado predeterminado es USD `0.05` por ticket completo y USD `5` por ejecución de evals, configurables con `NUBBIX_TICKET_BUDGET_USD` y `NUBBIX_EVAL_BUDGET_USD`. `decimal.js` evita sumas monetarias con punto flotante binario. Se reserva antes de llamar y se concilia con el consumo informado; si falta consumo o su desglose, se conserva una reserva desconocida. Estos controles locales no garantizan la factura final del proveedor. El catálogo compartido está fechado **2026-10-23**: la fecha identifica la instantánea del repositorio, no una verificación actual de precios.
 
-`src/prompt-registry.yaml` es la única lista de versiones, etiquetas, default, baseline y rutas de recursos. `PromptRegistry` valida y precarga los archivos; CLI, UI y evals consumen la misma configuración. `basic-v1` usa el prompt local `prompt.yaml`; `basic-v2` comparte esas instrucciones y agrega cuatro ejemplos independientes, uno por categoría. Las políticas de moderación y reparación están en `safety.yaml`. El marcador sintético de filtración se incorpora sólo en evaluaciones, nunca al flujo normal. Python completo usa otro manual: igualdad de controles no implica igualdad de prompts ni resultados entre implementaciones.
+`src/prompting/prompt-registry.yaml` es la única lista de versiones, etiquetas, default, baseline y rutas de recursos. `PromptRegistry` valida y precarga los archivos; CLI, UI y evals consumen la misma configuración. `basic-v1` usa el prompt local `src/prompting/prompt.yaml`; `basic-v2` comparte esas instrucciones y agrega cuatro ejemplos independientes, uno por categoría. Las políticas de moderación y reparación están en `src/prompting/resources/safety.yaml`. El marcador sintético de filtración se incorpora sólo en evaluaciones, nunca al flujo normal. Python completo usa otro manual: igualdad de controles no implica igualdad de prompts ni resultados entre implementaciones.
 
 Para agregar una versión con instrucciones propias, creá su YAML y una entrada en el registro, reconstruí y reiniciá. No requiere editar enums ni selectores. Consultá la [guía para agregar y comparar prompts](../docs/prompt-versions.md), que incluye un ejemplo de `basic-v3`, ejemplos opcionales y las reglas de compatibilidad de reportes antiguos.
 
@@ -160,7 +160,7 @@ Hay normalmente tres llamadas al LLM. Cada una pasa por el mismo ejecutor, que a
 
 ```mermaid
 flowchart TD
-  A["CÓDIGO / cli.ts: leer argumentos o stdin"] --> B{"CÓDIGO / Zod: entrada válida?"}
+  A["CÓDIGO / support/cli.ts: leer argumentos o stdin"] --> B{"CÓDIGO / Zod: entrada válida?"}
   B -->|no| ERR["CÓDIGO: AppError sanitizado; exit 2"]
   B -->|sí| C["CÓDIGO: cargar configuración, tarifa, YAML y hashes"]
   C --> D["CÓDIGO / RunReportWriter: reservar archivo running"]
@@ -200,36 +200,40 @@ La telemetría de intentos y cierre contiene sólo metadatos. El reporte manual 
 
 ```text
 src/
-  schemas.ts         Contratos Zod y tipos inferidos
-  provider-types.ts  Interfaz que necesita el servicio
-  service.ts         SupportAssistant: seguridad y respuesta pública
-  service-run.ts     Estado y cierre por ticket; derivación por confianza
-  execution.ts       StructuredExecutor: llamadas, validación, intentos y reservas
-  prompt-registry.yaml Única lista de versiones, etiquetas, default y baseline
-  prompt-registry.ts Precarga, validación, render y hashes de recursos registrados
-  prompt-contracts.ts Contratos de IDs/metadatos portables al navegador
-  prompts.ts         API compatible para cargar un bundle mediante el registro
-  prompt.yaml        Plantilla local básica, compartida inicialmente por v1/v2
-  resources/         Manual, seguridad y ejemplos few-shot
-  budget.ts          Budget, Price y PriceCatalog con decimales
-  telemetry.ts       Contratos de eventos y trazas sin contenido
-  observability/     Eventos finos, RunObserver e instrumentación por intento
-  event-sink.ts      stderr y archivo JSONL opcional
-  config.ts          Configuración explícita y lectura de .env
-  runtime-settings.ts Límites de tiempo, tokens y dinero
-  providers.ts       Adaptadores de los tres SDK
-  errors.ts          Códigos y diagnósticos públicos seguros
-  cli.ts             Entrada por terminal; composition root
-  eval-cli.ts        Comandos live y offline de evaluación
-  evals/             Dataset, métricas, revisión, comparación y reportes
+  support/           Contratos Zod, SupportAssistant, ciclo por ticket y composición CLI
+    schemas.ts       Entrada y respuesta pública
+    service.ts       Orden de moderación, generación y publicación
+    service-run.ts   Estado y cierre de una ejecución
+    cli.ts           Argumentos/stdin y construcción del servicio
+  llm/               Puerto común, adaptadores SDK y ejecución estructurada
+    provider-types.ts Contrato neutral del proveedor
+    providers.ts     Adaptadores OpenAI, xAI y Google AI
+    execution.ts     Intentos, validación, plazos y uso de presupuestos
+  prompting/         Registro, cargador, contratos y recursos de prompts
+    prompt-registry.yaml Versiones, etiquetas, default y baseline
+    prompt-registry.ts Validación, precarga, render y hashes
+    prompt.yaml      Plantilla local compartida inicialmente por v1/v2
+    resources/       Manual, seguridad y ejemplos few-shot
+  costs/             Budget, Price y PriceCatalog con decimales
+  config/            environment.ts y runtime-settings.ts
+  observability/     Eventos, instrumentación, telemetry.ts y event-sink.ts
+  resources/         read-shared.ts: acceso a datasets y tarifas distribuidos
+  evals/             CLI de evals, dataset, métricas, revisión y reportes
   inspection/        Canal explícito de depuración, separado de logs de metadatos
   lab/               SQLite, historial, trabajos de evaluación y revisiones
   web/               Express, contratos HTTP y frontend TypeScript
+  errors.ts          Códigos y diagnósticos públicos compartidos
+  cli.ts             Entrada compatible: delega en support/cli.ts
+  eval-cli.ts        Entrada compatible: delega en evals/cli.ts
   index.ts           API importable sin ejecutar la CLI
 tests/               Contratos, políticas, SDK simulados, CLI, evals y concurrencia
 ```
 
-`npm test` construye primero `dist`, incluidos los recursos, y ejecuta pruebas offline. `npm run check` revisa tipos del código y tests. `predev` prepara los recursos antes de `npm run dev`. El build copia también los datasets y precios canónicos de Python a `dist/resources/shared`; la ejecución TS compilada no invoca Python. El lockfile fija dependencias: usá `npm ci`. OpenAI está fijado a `7.43.0`, xAI a `0.2.5` y `decimal.js` a `10.6.0`; este SDK de xAI es experimental. El adaptador rechaza `XAI_DEBUG=1` porque habilitarlo podría registrar datos privados; OpenAI fuerza logging desactivado.
+La organización agrupa archivos que cambian por el mismo motivo. `support` conserva el caso de uso; `llm` adapta llamadas externas; `prompting` reúne instrucciones y recursos; `costs` y `config` contienen sus políticas específicas. Los observadores, el almacenamiento y los transportes se mantienen fuera de las decisiones de soporte. No se agregaron capas de herencia, contenedores de DI ni archivos de reexportación por carpeta.
+
+Los comandos siguen siendo `node dist/cli.js`, `node dist/eval-cli.js` y `node dist/web/server.js`. Las dos entradas pequeñas de la raíz mantienen esas rutas; las implementaciones de terminal están junto a sus módulos de soporte y evaluaciones. Para consumir la biblioteca, preferí las exportaciones de `dist/index.js` frente a depender de rutas internas.
+
+`npm test` construye primero `dist`, incluidos los recursos, y ejecuta pruebas offline. `npm run check` revisa tipos del código y tests. `predev` prepara los recursos antes de `npm run dev`. El build limpia los artefactos anteriores de `dist` para no ocultar imports rotos con archivos de la estructura vieja. También copia los datasets y precios canónicos de Python a `dist/resources/shared`; la ejecución TS compilada no invoca Python. El lockfile fija dependencias: usá `npm ci`. OpenAI está fijado a `7.43.0`, xAI a `0.2.5` y `decimal.js` a `10.6.0`; este SDK de xAI es experimental. El adaptador rechaza `XAI_DEBUG=1` porque habilitarlo podría registrar datos privados; OpenAI fuerza logging desactivado.
 
 El build también usa esbuild para generar el módulo de navegador y copia HTML/CSS a `dist/web/public`. Express sirve esos recursos relativos al módulo compilado, por lo que el panel empaquetado funciona desde otro directorio. El frontend no importa configuración de entorno ni clientes SDK.
 
@@ -282,7 +286,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["CÓDIGO / eval-cli.ts"] --> MODE{"CÓDIGO: comando live u offline?"}
+  A["CÓDIGO / evals/cli.ts"] --> MODE{"CÓDIGO: comando live u offline?"}
   MODE -->|run, compare, adversarial| INIT["CÓDIGO: validar configuración, dataset y regex; cargar YAML y hashes"]
   INIT --> PLAN["CÓDIGO: reservar reportes notRun y presupuesto compartido"]
   PLAN --> NEXT["CÓDIGO: elegir caso y variante; alternar orden en compare"]

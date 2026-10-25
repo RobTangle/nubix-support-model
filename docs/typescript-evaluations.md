@@ -22,7 +22,7 @@ En la app, agregar una acción que sugiere revisión humana tampoco ejecuta una 
 
 También podés ejecutar y revisar desde **Nubbix Flow Lab**: `npm run web` arranca LIVE; `npm run web:demo` es una simulación explícita. En la sección **Evaluaciones** elegí proveedor, operación y versión. `compare` exige desarrollo, permite dos o más versiones y un baseline, e intercala las variantes. `adversarial` admite comparar moderación, con el mismo presupuesto compartido. Se permiten un job activo y las mismas llamadas secuenciales de la CLI.
 
-Las versiones y etiquetas vienen de `src/prompt-registry.yaml`. Consultalas sin consumir API con `node dist/eval-cli.js --list-prompts`. Para crear una variante nueva, seguí la [guía de versiones](prompt-versions.md): no se editan listas en TypeScript ni HTML. Sin `--prompt-versions`, `compare` ejecuta todas las registradas; agregar una versión aumenta casos y consumo previsto dentro del mismo límite USD 5.
+Las versiones y etiquetas vienen de `src/prompting/prompt-registry.yaml`. Consultalas sin consumir API con `node dist/eval-cli.js --list-prompts`. Para crear una variante nueva, seguí la [guía de versiones](prompt-versions.md): no se editan listas en TypeScript ni HTML. Sin `--prompt-versions`, `compare` ejecuta todas las registradas; agregar una versión aumenta casos y consumo previsto dentro del mismo límite USD 5.
 
 ```powershell
 # Tras registrar basic-v3: elegir sólo las variantes que querés medir.
@@ -165,7 +165,7 @@ Este recorrido usa PowerShell desde `typescript-basic`. Los comandos live consum
 
 Ejecutá `npm ci` y `npm run build`. Configurá `GEMINI_API_KEY` en el `.env` de la raíz del repositorio; no hace falta configurar los otros proveedores. El modelo predeterminado es `gemini-3.5-flash-lite`. Si elegís otro mediante `NUBBIX_GOOGLE_AI_MODEL`, agregá antes su tarifa al catálogo canónico y reconstruí los recursos con `npm run build`.
 
-El manual que tenés que usar para juzgar las respuestas está en `typescript-basic/src/resources/context.yaml`. Las políticas de seguridad están en `safety.yaml`, en el mismo directorio. No juzgues contra funcionalidades que imaginás que podría tener un SaaS: este ejemplo sólo autoriza lo escrito en su manual ficticio.
+El manual que tenés que usar para juzgar las respuestas está en `typescript-basic/src/prompting/resources/context.yaml`. Las políticas de seguridad están en `safety.yaml`, en el mismo directorio. No juzgues contra funcionalidades que imaginás que podría tener un SaaS: este ejemplo sólo autoriza lo escrito en su manual ficticio.
 
 ### 2. Ejecutar una comparación de desarrollo
 

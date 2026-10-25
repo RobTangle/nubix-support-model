@@ -1,6 +1,8 @@
 # Agregar y evaluar versiones de prompts
 
-Las versiones disponibles se declaran una sola vez en `typescript-basic/src/prompt-registry.yaml`. CLI, servidor, UI y evaluaciones consumen ese registro. El navegador recibe IDs y etiquetas; nunca puede elegir rutas de archivos ni enviar instrucciones de sistema propias.
+Las versiones disponibles se declaran una sola vez en `typescript-basic/src/prompting/prompt-registry.yaml`. CLI, servidor, UI y evaluaciones consumen ese registro. El navegador recibe IDs y etiquetas; nunca puede elegir rutas de archivos ni enviar instrucciones de sistema propias.
+
+El módulo `prompting/` reúne el registro, su cargador, los contratos de IDs y los YAML. Los caminos escritos dentro del registro siguen siendo relativos a ese archivo: `resources/context.yaml` apunta a `src/prompting/resources/context.yaml`, no al directorio de recursos compartidos de datasets y tarifas.
 
 ## Cómo funciona el registro
 
@@ -35,8 +37,8 @@ Los IDs admiten de 1 a 64 caracteres: empiezan con letra minúscula y continúan
 Desde `typescript-basic`, creá una plantilla independiente:
 
 ```powershell
-New-Item -ItemType Directory -Path src/resources/prompts -Force
-Copy-Item src/prompt.yaml src/resources/prompts/basic-v3.yaml
+New-Item -ItemType Directory -Path src/prompting/resources/prompts -Force
+Copy-Item src/prompting/prompt.yaml src/prompting/resources/prompts/basic-v3.yaml
 ```
 
 Editá la copia: cambiá `version: basic-v3` y probá una modificación concreta dentro de `system: |`. Por ejemplo, instrucciones más precisas para priorizar el problema principal de tickets con múltiples temas. Conservá `{{manual}}`, el contrato JSON, el tratamiento del ticket como dato no confiable y las restricciones de seguridad. No modifiques los recursos ya evaluados si querés comparar su versión histórica exacta.
@@ -49,7 +51,7 @@ Añadí esta entrada **dentro de la lista `prompts`** del registro:
     system: resources/prompts/basic-v3.yaml
 ```
 
-No hace falta modificar TypeScript, HTML, tests ni el script de build. La versión ya aparecerá en las opciones de soporte, evaluación, comparación y baseline después de reconstruir y reiniciar el servidor. El build copia los YAML de `src` preservando sus rutas, y el paquete incluye esos recursos en `dist`.
+No hace falta modificar TypeScript, HTML, tests ni el script de build. La versión ya aparecerá en las opciones de soporte, evaluación, comparación y baseline después de reconstruir y reiniciar el servidor. El build copia los YAML de `src` preservando sus rutas: el registro compilado queda en `dist/prompting/prompt-registry.yaml` y la nueva plantilla en `dist/prompting/resources/prompts/basic-v3.yaml`. El paquete incluye esos recursos.
 
 El ID del registro es la identidad pública. El campo `version` dentro de una plantilla identifica ese recurso: puede compartirse entre entradas, como hacen v1/v2 con `prompt.yaml`. Para experimentos independientes, preferí archivos separados. Cambiar el archivo compartido cambia todas las entradas que lo referencian.
 

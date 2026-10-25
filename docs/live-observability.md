@@ -84,6 +84,8 @@ Los actores azules del panel representan operaciones al proveedor; en demo ese p
 | `TimelineView` | Presenta actores, tiempos, estado y detalles con DOM seguro. No calcula costos ni decide seguridad. |
 | `PlaygroundController` | Coordina formulario, cancelación y estado visual. No reproduce las reglas de soporte. |
 
+Los archivos se agrupan por responsabilidad bajo `typescript-basic/src`: el flujo está en `support/service.ts` y `support/service-run.ts`; las llamadas estructuradas, en `llm/execution.ts`; los SDK, en `llm/providers.ts`; y los presupuestos, en `costs/budget.ts`. `observability/` concentra también `telemetry.ts` y `event-sink.ts`. `prompting/` carga las instrucciones. `web/` adapta HTTP y navegador, mientras `lab/` conserva el historial. Las entradas raíz de CLI mantienen sus rutas públicas; este orden de carpetas no agrega etapas ni requests al modelo.
+
 Esta composición aplica responsabilidad única y dependencias explícitas. Una interfaz sirve cuando hay implementaciones intercambiables, como proveedores o sinks; no se introducen interfaces vacías ni herencia para cumplir una sigla. El frontend usa TypeScript y esbuild: esta pantalla no necesita un framework adicional para gestionar su estado acotado.
 
 ## Contrato HTTP e incrementalidad
@@ -140,7 +142,7 @@ Cada conexión guarda PID y un token propio. El arranque identifica procesos ant
 
 Un job admite `provider`, `operation` (`run`, `compare`, `adversarial`), `promptVersion`, `split` y `compareModeration`. Para `compare` admite `promptVersions` (dos o más IDs) y `baselinePromptVersion` incluido entre ellos. Si se omiten, usa todas las versiones y el baseline del registro. No acepta rutas, claves, modelos arbitrarios ni comandos de shell. El límite USD 5 se comparte entre variantes; las llamadas siguen siendo secuenciales. La UI utiliza las mismas reglas de revisión y selección de desarrollo que los comandos offline. No hay LLM juez.
 
-`GET /api/config` incluye IDs, etiquetas, default y baseline cargados desde `src/prompt-registry.yaml`. Los selectores de soporte y evals se generan con esos datos. Un ID con formato correcto pero no registrado se rechaza antes de llamar al proveedor. El registro se precarga al iniciar: para agregar instrucciones/ejemplos, consultá la [guía de versiones](prompt-versions.md) y reconstruí/reiniciá. El historial conserva sus IDs originales aunque luego retires una versión del registro; consultarlo no vuelve a cargar su plantilla.
+`GET /api/config` incluye IDs, etiquetas, default y baseline cargados desde `src/prompting/prompt-registry.yaml`. Los selectores de soporte y evals se generan con esos datos. Un ID con formato correcto pero no registrado se rechaza antes de llamar al proveedor. El registro se precarga al iniciar: para agregar instrucciones/ejemplos, consultá la [guía de versiones](prompt-versions.md) y reconstruí/reiniciá. El historial conserva sus IDs originales aunque luego retires una versión del registro; consultarlo no vuelve a cargar su plantilla.
 
 ### Reservas de presupuesto
 

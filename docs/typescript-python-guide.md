@@ -6,21 +6,23 @@ Las implementaciones resuelven el mismo caso: clasificar un ticket y redactar un
 
 | Responsabilidad | Python básico | TypeScript | Motivo |
 |---|---|---|---|
-| Entrada y salida | `src/nubbix_support_basic/models.py` | `typescript-basic/src/schemas.ts` | Contrato validado en ejecución |
-| Caso de uso | `src/nubbix_support_basic/service.py` | `typescript-basic/src/service.ts` | Coordinar clasificación y respuesta |
-| Configuración | `ProviderSettings` en `providers.py` | `config.ts`, esquema y tipo `ProviderSettings` | Leer sólo la clave seleccionada |
+| Entrada y salida | `src/nubbix_support_basic/models.py` | `typescript-basic/src/support/schemas.ts` | Contrato validado en ejecución |
+| Caso de uso | `src/nubbix_support_basic/service.py` | `typescript-basic/src/support/service.ts` | Coordinar clasificación y respuesta |
+| Configuración | `ProviderSettings` en `providers.py` | `config/environment.ts`, esquema y tipo `ProviderSettings` | Leer sólo la clave seleccionada |
 | Construcción del proveedor | `create_provider()` | `createProvider()` | Elegir el adaptador en el arranque |
-| Contrato del proveedor | `LLMProvider`, `LLMRequest`, `LLMResult` compartidos | Interfaces en `provider-types.ts` | Aislar el servicio del SDK |
-| SDK | Adaptadores compartidos con la completa | `OpenAIProvider` y `XAIProvider` en `providers.ts` | Encapsular formato, transporte y errores |
-| Instrucciones de generación | `prompt.yaml` | `prompt.yaml`, `prompts.ts`, `resources/context.yaml` | `basic-v1` renderiza el texto básico original; el manual tiene una fuente compartida en TS |
-| Terminal | `argparse` en `cli.py` | `parseArgs` en `cli.ts` | Adaptar argumentos al caso de uso |
-| Entrada importable | `__init__.py`, `__main__.py` | `index.ts`, `cli.ts` | Importar la biblioteca sin ejecutar una consulta |
+| Contrato del proveedor | `LLMProvider`, `LLMRequest`, `LLMResult` compartidos | Interfaces en `llm/provider-types.ts` | Aislar el servicio del SDK |
+| SDK | Adaptadores compartidos con la completa | Adaptadores en `llm/providers.ts` | Encapsular formato, transporte y errores |
+| Instrucciones de generación | `prompt.yaml` | `prompting/prompt-registry.yaml`, `prompting/prompt.yaml`, `prompting/resources/context.yaml` | Versiones declaradas en un registro; manual compartido en TS |
+| Terminal | `argparse` en `cli.py` | `parseArgs` en `support/cli.ts`; entrada pública `cli.ts` | Adaptar argumentos al caso de uso |
+| Entrada importable | `__init__.py`, `__main__.py` | `index.ts`; entradas CLI separadas | Importar la biblioteca sin ejecutar una consulta |
 | Dependencias | `pyproject.toml` y `uv.lock` | `package.json` y `package-lock.json` | Instalación reproducible por ecosistema |
 | Pruebas | pytest | `node:test` y `node:assert` | Probar sin red ni credenciales |
 
 Python básico comparte adaptadores con la completa. TypeScript tiene sus propios adaptadores porque sus SDK y entorno son distintos. El SDK Python de xAI usa gRPC; el SDK TS elegido usa Responses sobre HTTP. No intentamos reproducir esos detalles de transporte línea por línea.
 
-Para los controles nuevos, leé `service.ts` junto con `service-run.ts` (orquestación y estado por ticket), `execution.ts` (llamadas estructuradas e intentos), `budget.ts` (reservas y precios), `telemetry.ts`/`event-sink.ts` (metadatos) y `evals/` (medición offline/live). TypeScript tiene un flujo de control equivalente al completo Python, pero no comparte todos sus prompts, manuales ni formatos de reporte. Los datasets y precios son recursos canónicos compartidos; los reportes TS tienen un esquema propio y rechazan un reporte Python como entrada incompatible.
+Las rutas cortas de la tabla son relativas a `typescript-basic/src`. Para los controles nuevos, leé `support/service.ts` junto con `support/service-run.ts` (orquestación y estado por ticket), `llm/execution.ts` (llamadas estructuradas e intentos), `costs/budget.ts` (reservas y precios), `observability/telemetry.ts`/`observability/event-sink.ts` (metadatos) y `evals/` (medición offline/live). TypeScript tiene un flujo de control equivalente al completo Python, pero no comparte todos sus prompts, manuales ni formatos de reporte. Los datasets y precios son recursos canónicos compartidos; los reportes TS tienen un esquema propio y rechazan un reporte Python como entrada incompatible.
+
+Las carpetas TS agrupan responsabilidades: `support` contiene el caso de uso, `llm` contiene la integración externa, `prompting` gestiona instrucciones, `config` lee configuración y `costs` lleva presupuestos. `web` y las CLI adaptan entradas; `lab` persiste el trabajo del laboratorio. Mover archivos a esas carpetas no cambia el flujo ni agrega una llamada al modelo. En Python también conviene agrupar módulos cuando comparten un motivo de cambio; la convención `src/<paquete>` añade el nombre importable del paquete, mientras este proyecto TS publica su API desde `src/index.ts`.
 
 ## 2. Zod desde lo que ya conocés de TypeScript
 
@@ -149,12 +151,12 @@ Diez operaciones concurrentes contra un doble de test prueban aislamiento, **no*
 
 Hay fixtures JSON compartidos en `tests/fixtures/basic-contract.json`: pytest y Zod deben aceptar o rechazar los mismos casos. Los tests también verifican Unicode, formato inválido, rechazos, plazos, cancelación, SDK con fetch simulado, separación de stdout/stderr e importación sin efectos. La CLI compilada se prueba desde otro directorio para comprobar que encuentra sus recursos.
 
-El build copia prompts y recursos a `dist`; los datasets y precios compartidos se copian desde sus archivos canónicos Python. Se resuelven relativos al módulo, no al directorio de la terminal. El runtime TS no ejecuta Python. `predev` prepara esos archivos al usar `npm run dev`. Las extensiones `.js` en imports TS corresponden a los archivos emitidos en ESM con `module: NodeNext`. El compilador resuelve sus fuentes `.ts` durante el desarrollo.
+El build limpia `dist` y copia prompts y recursos preservando la distribución de carpetas: el registro queda en `dist/prompting/prompt-registry.yaml` y sus recursos en `dist/prompting/resources`. Los datasets y precios compartidos se copian desde sus archivos canónicos Python a `dist/resources/shared`; `resources/read-shared.ts` resuelve su ubicación. Las rutas se calculan desde el módulo, no desde el directorio de la terminal. El runtime TS no ejecuta Python. `predev` prepara esos archivos al usar `npm run dev`. Las extensiones `.js` en imports TS corresponden a los archivos emitidos en ESM con `module: NodeNext`. El compilador resuelve sus fuentes `.ts` durante el desarrollo.
 
-TypeScript ya implementa esos controles del flujo completo. Su `basic-v1` conserva el texto básico original al renderizar el manual compartido; `basic-v2` agrega cuatro ejemplos independientes. Python básico sigue siendo el recorrido más pequeño de una llamada. Python completo usa otro manual y otro esquema de reportes: no atribuyas sus resultados a TypeScript ni compares métricas como si el contexto fuera idéntico.
+TypeScript ya implementa esos controles del flujo completo. Su `basic-v1` usa la plantilla local al renderizar el manual compartido; `basic-v2` agrega cuatro ejemplos independientes. El [registro de versiones](prompt-versions.md) permite agregar instrucciones o ejemplos nuevos sin editar las listas de la CLI, UI o evals. Python básico sigue siendo el recorrido más pequeño de una llamada. Python completo usa otro manual y otro esquema de reportes: no atribuyas sus resultados a TypeScript ni compares métricas como si el contexto fuera idéntico.
 
 Los tests de software comprueban contratos, fallos y políticas con dobles de proveedor; las [evals TypeScript](typescript-evaluations.md) miden comportamiento real sobre datos sintéticos, con revisión humana. La validez del JSON, la clasificación, la calidad semántica y la seguridad son ejes distintos. Todavía no hay resultados live ni un prompt ganador demostrado. Antes de usarlo con clientes hay que sustituir el manual ficticio, evaluar cada proveedor/modelo y aplicar controles operativos.
 
-Un orden útil de lectura es: `schemas.ts` → `provider-types.ts` → `service.ts` → `service-run.ts` → `execution.ts` → `providers.ts` → `budget.ts`/`telemetry.ts` → `prompts.ts` → `cli.ts` → `evals/`. Así primero entendés qué promete el sistema, después cómo lo ejecuta y por último cómo se compone y se mide.
+Un orden útil de lectura es: `support/schemas.ts` → `llm/provider-types.ts` → `support/service.ts` → `support/service-run.ts` → `llm/execution.ts` → `llm/providers.ts` → `costs/budget.ts`/`observability/telemetry.ts` → `prompting/prompt-registry.ts`/`prompting/prompts.ts` → `support/cli.ts` → `evals/`. Así primero entendés qué promete el sistema, después cómo lo ejecuta y por último cómo se compone y se mide. Las entradas raíz `cli.ts` y `eval-cli.ts` conservan los comandos públicos y delegan en sus implementaciones.
 
 Referencias de las bibliotecas: [fundamentos de Zod](https://zod.dev/basics), [conversión a JSON Schema](https://zod.dev/json-schema), [SDK oficial de OpenAI para TS](https://github.com/openai/openai-node) y [SDK oficial de xAI para TS](https://github.com/xai-org/xai-sdk-ts). Las versiones instaladas y su lockfile son la referencia para los detalles de esta implementación.
