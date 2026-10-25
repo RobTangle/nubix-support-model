@@ -2,62 +2,81 @@
 
 Las versiones disponibles se declaran una sola vez en `typescript-basic/src/prompting/prompt-registry.yaml`. CLI, servidor, UI y evaluaciones consumen ese registro. El navegador recibe IDs y etiquetas; nunca puede elegir rutas de archivos ni enviar instrucciones de sistema propias.
 
-El módulo `prompting/` reúne el registro, su cargador, los contratos de IDs y los YAML. Los caminos escritos dentro del registro siguen siendo relativos a ese archivo: `resources/context.yaml` apunta a `src/prompting/resources/context.yaml`, no al directorio de recursos compartidos de datasets y tarifas.
+El módulo `prompting/` reúne el registro, su cargador, los contratos de IDs y una carpeta independiente por versión. Cada carpeta conserva sus instrucciones, manual, seguridad y ejemplos opcionales. Los caminos escritos en el registro son relativos a ese archivo: `versions/basic-v1/context.yaml` apunta al manual de v1, no al directorio compartido de datasets y tarifas.
 
 ## Cómo funciona el registro
 
 ```yaml
-version: '1'
+version: '2'
 default: basic-v1
 baseline: basic-v1
-context: resources/context.yaml
-safety: resources/safety.yaml
 prompts:
   - id: basic-v1
     label: basic-v1 · contexto base
-    system: prompt.yaml
+    system: versions/basic-v1/system.yaml
+    context: versions/basic-v1/context.yaml
+    safety: versions/basic-v1/safety.yaml
   - id: basic-v2
     label: basic-v2 · contexto + cuatro ejemplos
-    system: prompt.yaml
-    examples: resources/basic-v2.yaml
+    system: versions/basic-v2/system.yaml
+    context: versions/basic-v2/context.yaml
+    safety: versions/basic-v2/safety.yaml
+    examples: versions/basic-v2/examples.yaml
 ```
 
 - `default`: versión usada cuando no elegís una; también es la selección inicial de la UI.
 - `baseline`: referencia inicial para comparar candidatas. Puede ser distinta del default y debe estar incluida entre las variantes comparadas.
-- `context` y `safety`: manual, moderaciones y reparación compartidos para mantener constantes esas condiciones del experimento.
-- `prompts`: ID público, etiqueta visual, plantilla de instrucciones y ejemplos opcionales de cada versión. El orden determina la presentación y el orden inicial de ejecución.
+- `prompts`: ID público, etiqueta visual y rutas de los recursos propios de cada versión. El orden determina la presentación y el orden inicial de ejecución.
+- `system`, `context` y `safety`, dentro de cada entrada: instrucciones de generación, manual y políticas de moderación/reparación de esa versión. `examples` es opcional.
 - `version`: identifica la revisión del registro; no selecciona un prompt ni modifica el formato de los reportes.
 
-Los IDs admiten de 1 a 64 caracteres: empiezan con letra minúscula y continúan con letras minúsculas, dígitos o guiones. Las rutas son relativas al registro y deben apuntar a archivos `.yaml` dentro de ese directorio; se rechazan rutas absolutas, URLs, `..` y enlaces que salgan del árbol de recursos. No hay descarga remota de prompts.
+Los IDs admiten de 1 a 64 caracteres: empiezan con letra minúscula y continúan con letras minúsculas, dígitos o guiones. Las rutas son relativas al registro y deben apuntar a archivos `.yaml` dentro de `versions/<id>/`. El cargador rechaza referencias a otras carpetas de versión, rutas absolutas, URLs, `..`, enlaces que salgan del árbol y recursos físicos compartidos entre versiones. No hay descarga remota de prompts.
 
-`PromptRegistry.load()` valida todos los archivos al iniciar, incluidos los de versiones que todavía no elegiste. Una referencia rota impide arrancar antes de consumir API. `get()` entrega una copia del bundle ensamblado; una request no puede modificar el prompt compartido de otra. `loadPrompts()` conserva un atajo compatible para scripts y delega al mismo registro.
+`PromptRegistry.load()` valida todos los archivos al iniciar, incluidos los de versiones que todavía no elegiste. Una referencia rota impide arrancar antes de consumir API. `get()` entrega una copia del bundle ensamblado; una request no puede modificar el bundle reutilizado por otra. `loadPrompts()` conserva un atajo compatible para scripts y delega al mismo registro.
 
 ## Ejemplo: crear basic-v3
 
-Desde `typescript-basic`, creá una plantilla independiente:
+Desde `typescript-basic`, copiá la carpeta de una versión existente. El destino nuevo no debe existir; así evitás sobrescribir un experimento anterior:
 
 ```powershell
-New-Item -ItemType Directory -Path src/prompting/resources/prompts -Force
-Copy-Item src/prompting/prompt.yaml src/prompting/resources/prompts/basic-v3.yaml
+Copy-Item -Recurse src/prompting/versions/basic-v2 src/prompting/versions/basic-v3
 ```
 
-Editá la copia: cambiá `version: basic-v3` y probá una modificación concreta dentro de `system: |`. Por ejemplo, instrucciones más precisas para priorizar el problema principal de tickets con múltiples temas. Conservá `{{manual}}`, el contrato JSON, el tratamiento del ticket como dato no confiable y las restricciones de seguridad. No modifiques los recursos ya evaluados si querés comparar su versión histórica exacta.
+Editá la copia: cambiá `version: basic-v3` en `system.yaml` y `version: basic-v3-examples` en `examples.yaml`, si lo conservás. Los campos `version` del manual y de seguridad pueden mantenerse mientras su contenido no cambie. Probá una modificación concreta de instrucciones o ejemplos; conservá `{{manual}}`, el contrato JSON, el tratamiento del ticket como dato no confiable y las restricciones de seguridad.
 
 Añadí esta entrada **dentro de la lista `prompts`** del registro:
 
 ```yaml
   - id: basic-v3
     label: basic-v3 · prioridad del problema principal
-    system: resources/prompts/basic-v3.yaml
+    system: versions/basic-v3/system.yaml
+    context: versions/basic-v3/context.yaml
+    safety: versions/basic-v3/safety.yaml
+    examples: versions/basic-v3/examples.yaml
 ```
 
-No hace falta modificar TypeScript, HTML, tests ni el script de build. La versión ya aparecerá en las opciones de soporte, evaluación, comparación y baseline después de reconstruir y reiniciar el servidor. El build copia los YAML de `src` preservando sus rutas: el registro compilado queda en `dist/prompting/prompt-registry.yaml` y la nueva plantilla en `dist/prompting/resources/prompts/basic-v3.yaml`. El paquete incluye esos recursos.
+Si no querés ejemplos, quitá el campo `examples` y su archivo de la nueva carpeta. No hace falta modificar TypeScript, HTML, tests ni el script de build. La versión aparecerá en soporte, evaluación, comparación y baseline después de reconstruir y reiniciar el servidor. El build conserva las rutas: el registro compilado queda en `dist/prompting/prompt-registry.yaml` y los recursos en `dist/prompting/versions/<id>/`.
 
-El ID del registro es la identidad pública. El campo `version` dentro de una plantilla identifica ese recurso: puede compartirse entre entradas, como hacen v1/v2 con `prompt.yaml`. Para experimentos independientes, preferí archivos separados. Cambiar el archivo compartido cambia todas las entradas que lo referencian.
+El ID del registro es la identidad pública. El campo `version` dentro de cada YAML identifica la revisión de ese recurso. En la migración inicial, v1 y v2 reciben copias de sus recursos efectivos: las instrucciones, manual y seguridad parten del mismo contenido, y v2 conserva sus cuatro ejemplos. Desde entonces editar los archivos de v2 no modifica v1.
+
+### Historial sencillo con Git
+
+Los archivos siguen siendo editables. La aplicación no impone inmutabilidad ni bloquea el sistema de archivos: **conservar una versión evaluada es una convención del equipo, respaldada por Git**. Para una candidata nueva, copiá una carpeta y usá otro ID. Guardá un commit que explique la hipótesis del cambio; los reportes e historial siguen identificando la versión y sus hashes aunque retires su entrada del registro.
+
+Los hashes detectan que el contenido cambió, pero no reconstruyen un archivo anterior por sí solos. Git conserva ese contenido y permite revisar diferencias. Evitá reutilizar un ID para un experimento distinto o modificar reportes históricos para que parezcan compatibles. Elegir `default` cambia la selección inicial; `baseline` sigue siendo una referencia de comparación. No hay un sistema de promociones ni un flujo adicional de publicación.
+
+Después de revisar los archivos y ejecutar las comprobaciones que correspondan, podés guardar la candidata con un commit enfocado. Revisá el diff preparado antes de confirmarlo:
+
+```powershell
+git add src/prompting/versions/basic-v3 src/prompting/prompt-registry.yaml
+git diff --cached -- src/prompting/versions/basic-v3 src/prompting/prompt-registry.yaml
+git commit -m "feat(prompts): add basic-v3 with clearer ticket prioritization"
+git log --oneline -- src/prompting/versions/basic-v3
+```
 
 ### Ejemplos opcionales
 
-Podés añadir `examples: resources/prompts/basic-v3-examples.yaml` a la entrada. Su archivo debe tener:
+Podés añadir `examples: versions/basic-v3/examples.yaml` a la entrada. Su archivo debe tener:
 
 ```yaml
 version: basic-v3-examples
@@ -107,6 +126,6 @@ node dist/eval-cli.js compare --reports reports/ID_BASE.json --reports reports/I
 
 Esta operación es offline: puede leer versiones retiradas del registro. Los reportes comparativos nuevos guardan el baseline en su procedencia; no se permite sustituirlo al adjudicar. Los reportes individuales y antiguos permiten indicarlo explícitamente; si no está declarado, se usa el menor ID en orden lexicográfico como fallback estable. Para evitar ambigüedad, elegí siempre la referencia al comparar archivos individuales.
 
-Se exige igualdad de proveedor/modelo, corpus, manual, seguridad, configuración, precios, SDK y contrato. El texto de generación y los ejemplos sí pueden variar: son las variables experimentales. Los hashes de cada bundle y del registro conservan la procedencia; un hash identifica contenido, no acredita su calidad ni vuelve determinista al proveedor.
+Se exige igualdad de proveedor/modelo, corpus, manual, seguridad, configuración, precios, SDK y contrato. Tener copias independientes no exige que su contenido sea diferente: las copias iniciales del manual y la seguridad son idénticas. Si cambiás esos recursos en una versión, podés ejecutar sus evals individuales, pero `compare` rechaza contextos distintos para evitar atribuir toda diferencia a las instrucciones o ejemplos. El texto de generación y los ejemplos sí pueden variar: son las variables de esa comparación. Los hashes de cada bundle y del registro conservan la procedencia; un hash identifica contenido, no acredita su calidad ni vuelve determinista al proveedor.
 
 Las revisiones humanas pendientes, regresiones de seguridad y demás gates siguen impidiendo recomendar un prompt. Registrar una versión o elegirla como default no demuestra que sea mejor. Usá desarrollo para elegir, reservá prueba para la evaluación final y mantené revisión supervisada mientras el manual siga siendo ficticio.

@@ -144,6 +144,8 @@ Un job admite `provider`, `operation` (`run`, `compare`, `adversarial`), `prompt
 
 `GET /api/config` incluye IDs, etiquetas, default y baseline cargados desde `src/prompting/prompt-registry.yaml`. Los selectores de soporte y evals se generan con esos datos. Un ID con formato correcto pero no registrado se rechaza antes de llamar al proveedor. El registro se precarga al iniciar: para agregar instrucciones/ejemplos, consultá la [guía de versiones](prompt-versions.md) y reconstruí/reiniciá. El historial conserva sus IDs originales aunque luego retires una versión del registro; consultarlo no vuelve a cargar su plantilla.
 
+Los recursos de una versión viven en `src/prompting/versions/<id>/`: instrucciones, manual, seguridad y ejemplos opcionales. El flujo y los reportes identifican la versión y sus hashes; el inspector muestra las instrucciones utilizadas. Editar v2 no cambia v1. Mantener una versión evaluada intacta es una convención respaldada por Git; el laboratorio no bloquea ediciones ni agrega un flujo de promociones.
+
 ### Reservas de presupuesto
 
 `budget.reserved` registra dinero estimado comprometido antes de una llamada: por ejemplo, reservar USD 0.010 y conciliar USD 0.002 libera USD 0.008. No hay un cargo o bloqueo bancario. Si no se informa uso, mantener la reserva evita que un timeout deje el contador falsamente en cero. Los registros distinguen costo conocido y reserva por consumo desconocido; no los presentes como factura definitiva.

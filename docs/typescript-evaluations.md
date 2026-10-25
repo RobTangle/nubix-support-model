@@ -24,6 +24,8 @@ También podés ejecutar y revisar desde **Nubbix Flow Lab**: `npm run web` arra
 
 Las versiones y etiquetas vienen de `src/prompting/prompt-registry.yaml`. Consultalas sin consumir API con `node dist/eval-cli.js --list-prompts`. Para crear una variante nueva, seguí la [guía de versiones](prompt-versions.md): no se editan listas en TypeScript ni HTML. Sin `--prompt-versions`, `compare` ejecuta todas las registradas; agregar una versión aumenta casos y consumo previsto dentro del mismo límite USD 5.
 
+Cada entrada usa recursos propios en `src/prompting/versions/<id>/`. Copiar v2 para crear v3 permite editar instrucciones, ejemplos, manual o seguridad sin afectar versiones anteriores. Para conservar un experimento evaluado, mantené su carpeta y creá otro ID; Git aporta el historial y los hashes detectan modificaciones. No hay bloqueo de edición ni un sistema de promociones.
+
 ```powershell
 # Tras registrar basic-v3: elegir sólo las variantes que querés medir.
 node dist/eval-cli.js compare --provider google-ai --prompt-versions basic-v1 --prompt-versions basic-v3 --baseline-prompt basic-v1 --split dev
@@ -139,6 +141,8 @@ node dist/eval-cli.js compare --reports reports/ID_V1.json --reports reports/ID_
 
 La comparación exige dos o más reportes de versiones distintas en desarrollo, del mismo proveedor y modelo, con contexto comparable: configuración, datasets, manual, seguridad, esquemas, SDK y precios. Exige igualdad de los hashes de moderación y reparación. Las instrucciones de generación y los ejemplos pueden variar: son las variables del experimento. No se mezclan reportes Python, proveedores ni modelos para decidir qué prompt ganó.
 
+La independencia de archivos no implica que su contenido tenga que ser distinto. Los manuales y políticas iniciales de v1/v2 son copias iguales. Si cambiás manual o seguridad en una candidata, `run` puede evaluarla individualmente, pero la comparación estándar rechaza esos reportes frente a otro contexto: no puede atribuir diferencias únicamente a instrucciones o ejemplos.
+
 Los reportes comparativos nuevos guardan `provenance.baselinePromptVersion` y rechazan cambiarlo al adjudicar. Reportes individuales o antiguos admiten `compare --reports ... --baseline-prompt ID`; si no declaran baseline, se usa el menor ID lexicográfico como fallback estable. Es preferible indicarlo explícitamente. Leer reportes o historia no requiere que sus versiones sigan en el registro actual.
 
 La elegibilidad exige evidencia live, suite completa en modo `full`, consumo completo, canary habilitado y revisión humana terminada. Sobre desarrollo se aplican estas metas:
@@ -165,7 +169,7 @@ Este recorrido usa PowerShell desde `typescript-basic`. Los comandos live consum
 
 Ejecutá `npm ci` y `npm run build`. Configurá `GEMINI_API_KEY` en el `.env` de la raíz del repositorio; no hace falta configurar los otros proveedores. El modelo predeterminado es `gemini-3.5-flash-lite`. Si elegís otro mediante `NUBBIX_GOOGLE_AI_MODEL`, agregá antes su tarifa al catálogo canónico y reconstruí los recursos con `npm run build`.
 
-El manual que tenés que usar para juzgar las respuestas está en `typescript-basic/src/prompting/resources/context.yaml`. Las políticas de seguridad están en `safety.yaml`, en el mismo directorio. No juzgues contra funcionalidades que imaginás que podría tener un SaaS: este ejemplo sólo autoriza lo escrito en su manual ficticio.
+El manual que tenés que usar para juzgar cada respuesta está en `typescript-basic/src/prompting/versions/<id>/context.yaml`; las políticas de seguridad están en `safety.yaml` de esa misma versión. Para este recorrido, v1/v2 empiezan con copias de contenido igual. No juzgues contra funcionalidades que imaginás que podría tener un SaaS: este ejemplo sólo autoriza lo escrito en el manual utilizado por el caso.
 
 ### 2. Ejecutar una comparación de desarrollo
 

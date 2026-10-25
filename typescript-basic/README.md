@@ -109,9 +109,9 @@ Cada etapa admite **dos intentos totales**, compartidos entre errores transitori
 
 El presupuesto estimado predeterminado es USD `0.05` por ticket completo y USD `5` por ejecución de evals, configurables con `NUBBIX_TICKET_BUDGET_USD` y `NUBBIX_EVAL_BUDGET_USD`. `decimal.js` evita sumas monetarias con punto flotante binario. Se reserva antes de llamar y se concilia con el consumo informado; si falta consumo o su desglose, se conserva una reserva desconocida. Estos controles locales no garantizan la factura final del proveedor. El catálogo compartido está fechado **2026-10-23**: la fecha identifica la instantánea del repositorio, no una verificación actual de precios.
 
-`src/prompting/prompt-registry.yaml` es la única lista de versiones, etiquetas, default, baseline y rutas de recursos. `PromptRegistry` valida y precarga los archivos; CLI, UI y evals consumen la misma configuración. `basic-v1` usa el prompt local `src/prompting/prompt.yaml`; `basic-v2` comparte esas instrucciones y agrega cuatro ejemplos independientes, uno por categoría. Las políticas de moderación y reparación están en `src/prompting/resources/safety.yaml`. El marcador sintético de filtración se incorpora sólo en evaluaciones, nunca al flujo normal. Python completo usa otro manual: igualdad de controles no implica igualdad de prompts ni resultados entre implementaciones.
+`src/prompting/prompt-registry.yaml` es la única lista de versiones, etiquetas, default, baseline y rutas de recursos. `PromptRegistry` valida y precarga los archivos; CLI, UI y evals consumen la misma configuración. Cada versión tiene una carpeta propia en `src/prompting/versions/<id>/`, con `system.yaml`, `context.yaml`, `safety.yaml` y `examples.yaml` opcional. Las instrucciones, manual y seguridad de v1/v2 parten de copias iguales; v2 además conserva cuatro ejemplos, uno por categoría. Desde ahora editar una versión no cambia la otra. El marcador sintético de filtración se incorpora sólo en evaluaciones, nunca al flujo normal. Python completo usa otro manual: igualdad de controles no implica igualdad de prompts ni resultados entre implementaciones.
 
-Para agregar una versión con instrucciones propias, creá su YAML y una entrada en el registro, reconstruí y reiniciá. No requiere editar enums ni selectores. Consultá la [guía para agregar y comparar prompts](../docs/prompt-versions.md), que incluye un ejemplo de `basic-v3`, ejemplos opcionales y las reglas de compatibilidad de reportes antiguos.
+Para agregar una versión, copiá una carpeta, cambiá sus instrucciones o ejemplos y agregá una entrada con sus rutas en el registro; luego reconstruí y reiniciá. No requiere editar enums ni selectores. Conservá las versiones evaluadas mediante Git y nuevos IDs: la aplicación detecta cambios con hashes, pero no bloquea la edición de archivos. Consultá la [guía para agregar y comparar prompts](../docs/prompt-versions.md), que incluye `basic-v3`, historial sencillo y compatibilidad de reportes antiguos. Si cambiás manual o seguridad, podés evaluar esa versión individualmente; la comparación estándar de instrucciones/ejemplos exige que esas condiciones sean iguales.
 
 ```powershell
 # Descubrimiento offline: sin claves ni consumo.
@@ -212,8 +212,9 @@ src/
   prompting/         Registro, cargador, contratos y recursos de prompts
     prompt-registry.yaml Versiones, etiquetas, default y baseline
     prompt-registry.ts Validación, precarga, render y hashes
-    prompt.yaml      Plantilla local compartida inicialmente por v1/v2
-    resources/       Manual, seguridad y ejemplos few-shot
+    versions/        Recursos independientes por ID de prompt
+      basic-v1/      system.yaml, context.yaml y safety.yaml
+      basic-v2/      Los mismos recursos propios más examples.yaml
   costs/             Budget, Price y PriceCatalog con decimales
   config/            environment.ts y runtime-settings.ts
   observability/     Eventos, instrumentación, telemetry.ts y event-sink.ts
@@ -278,7 +279,7 @@ flowchart TD
   class E human
 ```
 
-`basic-v2` agrega cuatro ejemplos al contexto de `basic-v1`; mantiene manual y políticas. Comparar esas dos versiones procesa 120 combinaciones de caso y versión, habitualmente hasta 360 llamadas iniciales antes de bloqueos o reintentos. Cada versión adicional suma 60 casos; el presupuesto USD 5 se comparte entre todas las variantes. Alcanzarlo deja reportes parciales y no acredita una recomendación.
+`basic-v2` conserva inicialmente el contenido de instrucciones, manual y políticas de `basic-v1` en archivos independientes, y agrega cuatro ejemplos. Comparar esas dos versiones procesa 120 combinaciones de caso y versión, habitualmente hasta 360 llamadas iniciales antes de bloqueos o reintentos. Cada versión adicional suma 60 casos; el presupuesto USD 5 se comparte entre todas las variantes. Alcanzarlo deja reportes parciales y no acredita una recomendación.
 
 **No hay un LLM juez adicional en las evals.** Las requests 1 y 3 son los moderadores del servicio que estamos evaluando; sus decisiones también pueden estar equivocadas. El código calcula accuracy, F1, costos y reglas regex sin llamar al modelo. Una persona revisa utilidad, corrección, respeto del manual, ataques y falsos bloqueos. Después `summarize` y `compare --reports` sólo leen esas calificaciones y calculan resultados: no solicitan nuevas revisiones a un LLM ni a una persona automáticamente.
 
