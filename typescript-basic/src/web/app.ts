@@ -42,13 +42,17 @@ export function createApp(options: WebApplicationOptions) {
     ...options.configuration,
     maxConcurrent: options.maxConcurrent ?? options.configuration.maxConcurrent,
   });
+
   const app = express();
   const requests = new RequestTracker();
   const timeoutMs = options.streamTimeoutMs ?? 60_000;
+
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000)
     throw new AppError('configuration_error');
   let active = 0;
+
   app.disable('x-powered-by');
+
   app.use((request, response, next) => {
     response.set({
       'X-Content-Type-Options': 'nosniff',
