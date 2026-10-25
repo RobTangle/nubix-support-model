@@ -6,18 +6,24 @@
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
-import { Budget, type PriceCatalog } from './budget.js';
-import { AppError } from './errors.js';
+import { Budget, type PriceCatalog } from '../costs/budget.js';
+import { AppError } from '../errors.js';
 import type { LLMProvider, TokenUsage } from './provider-types.js';
-import type { PromptBundle } from './prompts.js';
-import type { RuntimeSettings } from './runtime-settings.js';
-import type { CapturedOutput, EventSink, RunTrace, Stage, AttemptTrace } from './telemetry.js';
-import type { FlowSink } from './observability/events.js';
-import type { RunObserver } from './observability/run-observer.js';
-import { AttemptObserver } from './observability/attempt-observer.js';
-import { recordObservedAttempt } from './observability/lifecycle.js';
-import type { InspectionSink } from './inspection/contracts.js';
-import type { RunInspection } from './inspection/run-inspection.js';
+import type { PromptBundle } from '../prompting/prompts.js';
+import type { RuntimeSettings } from '../config/runtime-settings.js';
+import type {
+  CapturedOutput,
+  EventSink,
+  RunTrace,
+  Stage,
+  AttemptTrace,
+} from '../observability/telemetry.js';
+import type { FlowSink } from '../observability/events.js';
+import type { RunObserver } from '../observability/run-observer.js';
+import { AttemptObserver } from '../observability/attempt-observer.js';
+import { recordObservedAttempt } from '../observability/lifecycle.js';
+import type { InspectionSink } from '../inspection/contracts.js';
+import type { RunInspection } from '../inspection/run-inspection.js';
 
 /** Dependencias compartibles: cliente, prompts, precios y políticas generales del asistente. */
 export interface AssistantOptions {

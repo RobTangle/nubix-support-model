@@ -1,7 +1,7 @@
 /** Prueba reservas, conciliación y tarifas: gastar con consumo desconocido debe conservar presupuesto. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Budget, loadPrices } from '../src/budget.js';
+import { Budget, loadPrices } from '../src/costs/budget.js';
 import { AppError } from '../src/errors.js';
 
 test('reservas desconocidas no se liberan; consumo conocido se concilia con precisión', () => {

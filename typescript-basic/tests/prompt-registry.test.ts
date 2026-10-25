@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { stringify } from 'yaml';
-import { PromptRegistry } from '../src/prompt-registry.js';
+import { PromptRegistry } from '../src/prompting/prompt-registry.js';
 import { AppError } from '../src/errors.js';
 
 async function fixture() {

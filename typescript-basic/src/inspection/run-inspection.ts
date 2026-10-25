@@ -1,5 +1,5 @@
 import { AppError } from '../errors.js';
-import { waitForTelemetry } from '../telemetry.js';
+import { waitForTelemetry } from '../observability/telemetry.js';
 import { inspectionEntrySchema, type InspectionEntry, type InspectionSink } from './contracts.js';
 
 /** Captura optativa para el laboratorio local. Nunca se conecta al logger de operación. */

@@ -4,14 +4,14 @@
  * Delega el ciclo de vida de cada ticket a service-run.ts y sus llamadas a execution.ts;
  * mantener esas responsabilidades aparte permite probar y evaluar el mismo flujo desde otros bordes.
  */
-import type { AssistantOptions, ProcessOptions } from './execution.js';
-import { loadPrompts } from './prompts.js';
+import type { AssistantOptions, ProcessOptions } from '../llm/execution.js';
+import { loadPrompts } from '../prompting/prompts.js';
 import { safeResponse, safetyAssessmentSchema, type SupportResponse } from './schemas.js';
 import { generateProposal, runSession, type SupportRun } from './service-run.js';
-import { runtimeSettingsSchema } from './runtime-settings.js';
-import { AppError } from './errors.js';
+import { runtimeSettingsSchema } from '../config/runtime-settings.js';
+import { AppError } from '../errors.js';
 
-export type { AssistantOptions, ProcessOptions } from './execution.js';
+export type { AssistantOptions, ProcessOptions } from '../llm/execution.js';
 export type { SupportRun } from './service-run.js';
 
 /** Alias conservado para estudiar el prompt de generación sin construir un cliente. */

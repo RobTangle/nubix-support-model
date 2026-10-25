@@ -1,10 +1,14 @@
 /** Prueba la secuencia de soporte completa: moderación, generación, reparación y derivación segura. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SupportAssistant } from '../src/service.js';
-import { loadPrompts } from '../src/prompts.js';
-import { loadPrices } from '../src/budget.js';
-import type { CompletionRequest, CompletionResult, LLMProvider } from '../src/provider-types.js';
+import { SupportAssistant } from '../src/support/service.js';
+import { loadPrompts } from '../src/prompting/prompts.js';
+import { loadPrices } from '../src/costs/budget.js';
+import type {
+  CompletionRequest,
+  CompletionResult,
+  LLMProvider,
+} from '../src/llm/provider-types.js';
 import { AppError } from '../src/errors.js';
 
 const answer = {

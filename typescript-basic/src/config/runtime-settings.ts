@@ -1,10 +1,10 @@
 /**
  * Políticas de ejecución: plazos, tokens máximos y presupuestos, con límites y defaults validados.
- * Separarlas de config.ts permite usar el mismo cliente con distintas políticas en pruebas/evals.
+ * Separarlas de environment.ts permite usar el mismo cliente con distintas políticas en pruebas/evals.
  * Los importes se representan como texto decimal; las duraciones se expresan en milisegundos.
  */
 import { z } from 'zod';
-import { AppError } from './errors.js';
+import { AppError } from '../errors.js';
 
 const money = z
   .string()

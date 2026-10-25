@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AppError } from '../errors.js';
 import { installedPackageVersion } from '../evals/package-version.js';
-import { responseJsonSchema, safetyJsonSchema } from '../schemas.js';
+import { responseJsonSchema, safetyJsonSchema } from '../support/schemas.js';
 import type { RunReport, RunReportOptions, RunReportResult } from './types.js';
 
 /** Archivo por ejecución: la reserva inicial impide gastar si el destino no se puede escribir. */

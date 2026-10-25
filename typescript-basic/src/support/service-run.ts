@@ -8,15 +8,15 @@
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { Budget } from './budget.js';
-import { AppError } from './errors.js';
+import { Budget } from '../costs/budget.js';
+import { AppError } from '../errors.js';
 import {
   StructuredExecutor,
   type AssistantOptions,
   type ExecutionContext,
   type ProcessOptions,
-} from './execution.js';
-import { runtimeSettingsSchema } from './runtime-settings.js';
+} from '../llm/execution.js';
+import { runtimeSettingsSchema } from '../config/runtime-settings.js';
 import {
   HUMAN_REVIEW_ACTION,
   supportResponseSchema,
@@ -24,11 +24,11 @@ import {
   type SupportResponse,
   type Ticket,
 } from './schemas.js';
-import type { RunTrace } from './telemetry.js';
-import { emitWithinDeadline } from './telemetry.js';
-import { RunObserver } from './observability/run-observer.js';
-import { RunInspection } from './inspection/run-inspection.js';
-import { finishObservedRun, validateObservedTicket } from './observability/lifecycle.js';
+import type { RunTrace } from '../observability/telemetry.js';
+import { emitWithinDeadline } from '../observability/telemetry.js';
+import { RunObserver } from '../observability/run-observer.js';
+import { RunInspection } from '../inspection/run-inspection.js';
+import { finishObservedRun, validateObservedTicket } from '../observability/lifecycle.js';
 
 /** Resultado completo de un ticket: respuesta pública y datos operativos de su ejecución. */
 export interface SupportRun {

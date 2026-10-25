@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
-import { readSharedResource } from '../resources.js';
+import { readSharedResource } from '../resources/read-shared.js';
 
 export const categories = ['billing', 'technical', 'account', 'other'] as const;
 export const categorySchema = z.enum(categories);

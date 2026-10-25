@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import type { CompletionRequest, CompletionResult, LLMProvider } from '../provider-types.js';
+import type { CompletionRequest, CompletionResult, LLMProvider } from '../llm/provider-types.js';
 
 /** Doble didáctico, no un modelo: conserva la interfaz real y nunca abre conexiones externas. */
 export class DemoProvider implements LLMProvider {

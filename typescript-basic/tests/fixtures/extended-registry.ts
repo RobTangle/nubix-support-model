@@ -2,11 +2,11 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse, stringify } from 'yaml';
-import { PromptRegistry } from '../../src/prompt-registry.js';
+import { PromptRegistry } from '../../src/prompting/prompt-registry.js';
 
 /** Registro aislado con una tercera variante; nunca cambia recursos reales ni llama al modelo. */
 export async function extendedRegistry(directory: string): Promise<PromptRegistry> {
-  const source = new URL('../../src/prompt-registry.yaml', import.meta.url);
+  const source = new URL('../../src/prompting/prompt-registry.yaml', import.meta.url);
   const manifest = parse(await readFile(source, 'utf8')) as {
     version: string;
     default: string;

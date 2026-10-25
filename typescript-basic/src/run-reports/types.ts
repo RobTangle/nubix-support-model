@@ -3,13 +3,13 @@
  * seleccionada explícitamente. La telemetría usa sólo metadatos; este reporte también contiene texto.
  * Separar los contratos del escritor permite tipar los consumidores sin cargar lógica de archivos.
  */
-import type { PriceCatalog } from '../budget.js';
-import type { ProviderSettings } from '../config.js';
+import type { PriceCatalog } from '../costs/budget.js';
+import type { ProviderSettings } from '../config/environment.js';
 import type { ErrorCode } from '../errors.js';
-import type { PromptBundle } from '../prompts.js';
-import type { RuntimeSettings } from '../runtime-settings.js';
-import type { SupportResponse } from '../schemas.js';
-import type { CapturedOutput, RunTrace } from '../telemetry.js';
+import type { PromptBundle } from '../prompting/prompts.js';
+import type { RuntimeSettings } from '../config/runtime-settings.js';
+import type { SupportResponse } from '../support/schemas.js';
+import type { CapturedOutput, RunTrace } from '../observability/telemetry.js';
 
 /** Datos disponibles al iniciar una corrida; no recibe el objeto de configuración con su API key. */
 export interface RunReportOptions {

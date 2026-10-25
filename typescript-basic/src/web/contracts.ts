@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { flowEventSchema } from '../observability/events.js';
-import { supportResponseSchema, ticketSchema } from '../schemas.js';
+import { supportResponseSchema, ticketSchema } from '../support/schemas.js';
 import { inspectionEntrySchema } from '../inspection/contracts.js';
-import { promptMetadataSchema, promptVersionSchema } from '../prompt-contracts.js';
+import { promptMetadataSchema, promptVersionSchema } from '../prompting/prompt-contracts.js';
 
 export const webProviderSchema = z.enum(['openai', 'xai', 'google-ai']);
 export const webPromptSchema = promptVersionSchema;

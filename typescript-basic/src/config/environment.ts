@@ -6,7 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
 import { z } from 'zod';
-import { AppError } from './errors.js';
+import { AppError } from '../errors.js';
 
 export const settingsSchema = z.strictObject({
   provider: z.enum(['openai', 'xai', 'google-ai']),
@@ -54,7 +54,7 @@ export async function readEnvironment(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<NodeJS.ProcessEnv> {
   try {
-    const source = await readFile(path ?? new URL('../../.env', import.meta.url), 'utf8');
+    const source = await readFile(path ?? new URL('../../../.env', import.meta.url), 'utf8');
     return { ...parseEnv(source), ...env };
   } catch (error) {
     if (path === undefined && error instanceof Error && 'code' in error && error.code === 'ENOENT')

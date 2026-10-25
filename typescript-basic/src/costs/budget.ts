@@ -8,9 +8,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Decimal } from 'decimal.js';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { AppError } from './errors.js';
-import type { CompletionRequest, TokenUsage } from './provider-types.js';
-import { readSharedResource } from './resources.js';
+import { AppError } from '../errors.js';
+import type { CompletionRequest, TokenUsage } from '../llm/provider-types.js';
+import { readSharedResource } from '../resources/read-shared.js';
 
 const decimalText = z
   .string()

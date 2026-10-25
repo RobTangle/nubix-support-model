@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { PriceCatalog } from '../budget.js';
+import type { PriceCatalog } from '../costs/budget.js';
 import { AppError, publicError } from '../errors.js';
 import { EvalRunner, type TargetContext } from '../evals/runner.js';
 import type { EvaluationDataset } from '../evals/data.js';
 import type { EvaluationTarget } from '../evals/types.js';
 import { assessReport, compareReports, humanReviewSchema } from '../evals/reviews.js';
-import type { RuntimeSettings } from '../runtime-settings.js';
-import { promptVersionSchema } from '../prompt-contracts.js';
-import type { PromptRegistry } from '../prompt-registry.js';
+import type { RuntimeSettings } from '../config/runtime-settings.js';
+import { promptVersionSchema } from '../prompting/prompt-contracts.js';
+import type { PromptRegistry } from '../prompting/prompt-registry.js';
 import type { WebProvider } from '../web/contracts.js';
 import { LabStore } from './storage.js';
 

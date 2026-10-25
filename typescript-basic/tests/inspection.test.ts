@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RunInspection } from '../src/inspection/run-inspection.js';
 import type { InspectionEntry } from '../src/inspection/contracts.js';
-import { SupportAssistant } from '../src/service.js';
-import { loadPrompts } from '../src/prompts.js';
-import { loadPrices } from '../src/budget.js';
+import { SupportAssistant } from '../src/support/service.js';
+import { loadPrompts } from '../src/prompting/prompts.js';
+import { loadPrices } from '../src/costs/budget.js';
 import type { FlowEvent } from '../src/observability/events.js';
 import { AppError } from '../src/errors.js';
 

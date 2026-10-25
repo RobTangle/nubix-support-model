@@ -4,9 +4,9 @@
  * TypeScript sólo verifican código al compilar. Centralizarlos mantiene lector y escritor de acuerdo.
  */
 import { z } from 'zod';
-import { promptVersionSchema } from '../prompt-contracts.js';
-import type { ProcessOptions, SupportRun } from '../service.js';
-import { supportResponseSchema } from '../schemas.js';
+import { promptVersionSchema } from '../prompting/prompt-contracts.js';
+import type { ProcessOptions, SupportRun } from '../support/service.js';
+import { supportResponseSchema } from '../support/schemas.js';
 import { categorySchema } from './data.js';
 import { metricsSchema, summarize } from './metrics.js';
 

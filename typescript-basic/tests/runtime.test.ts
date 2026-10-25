@@ -5,12 +5,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-import { SupportAssistant } from '../src/service.js';
-import { loadPrices } from '../src/budget.js';
-import { loadPrompts } from '../src/prompts.js';
+import { SupportAssistant } from '../src/support/service.js';
+import { loadPrices } from '../src/costs/budget.js';
+import { loadPrompts } from '../src/prompting/prompts.js';
 import { AppError } from '../src/errors.js';
-import type { CompletionRequest, CompletionResult, LLMProvider } from '../src/provider-types.js';
-import type { TelemetryEvent } from '../src/telemetry.js';
+import type {
+  CompletionRequest,
+  CompletionResult,
+  LLMProvider,
+} from '../src/llm/provider-types.js';
+import type { TelemetryEvent } from '../src/observability/telemetry.js';
 
 const usage = { inputTokens: 20, outputTokens: 10, cachedInputTokens: 0, cacheWriteInputTokens: 0 };
 const answer = { answer: 'RESPUESTA PRIVADA', confidence: 0.8, category: 'billing', actions: [] };

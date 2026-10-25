@@ -3,8 +3,8 @@
  * El borde de cada SDK traduce sus errores a AppError para evitar filtrar mensajes, claves o
  * contenido del ticket. El ejecutor usa retryable y usage para decidir reintentos y costos.
  */
-import type { TokenUsage } from './provider-types.js';
-import type { RunTrace } from './telemetry.js';
+import type { TokenUsage } from './llm/provider-types.js';
+import type { RunTrace } from './observability/telemetry.js';
 
 /** Códigos estables: una futura API HTTP podrá mapearlos a estados sin leer mensajes. */
 export type ErrorCode =

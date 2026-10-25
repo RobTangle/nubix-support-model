@@ -13,8 +13,8 @@ import {
   SpaceXAI,
   TimeoutError as XAITimeoutError,
 } from '@xai-official/sdk';
-import type { ProviderSettings } from './config.js';
-import { AppError } from './errors.js';
+import type { ProviderSettings } from '../config/environment.js';
+import { AppError } from '../errors.js';
 import type {
   CompletionRequest,
   CompletionResult,

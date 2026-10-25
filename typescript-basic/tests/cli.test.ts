@@ -126,12 +126,14 @@ test('CLI descubre versión y default nuevos desde YAML sin cambiar TypeScript',
       join(directory, 'node_modules'),
       'junction',
     );
-    await extendedRegistry(join(directory, 'dist'));
-    const registry = parse(readFileSync(join(directory, 'dist/registry.yaml'), 'utf8')) as {
+    await extendedRegistry(join(directory, 'dist/prompting'));
+    const registry = parse(
+      readFileSync(join(directory, 'dist/prompting/registry.yaml'), 'utf8'),
+    ) as {
       default: string;
     };
     registry.default = 'experiment-v3';
-    writeFileSync(join(directory, 'dist/prompt-registry.yaml'), stringify(registry));
+    writeFileSync(join(directory, 'dist/prompting/prompt-registry.yaml'), stringify(registry));
     const result = spawnSync(
       process.execPath,
       [

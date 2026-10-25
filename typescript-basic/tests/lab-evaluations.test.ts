@@ -6,14 +6,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import test from 'node:test';
-import { loadPrices } from '../src/budget.js';
+import { loadPrices } from '../src/costs/budget.js';
 import { LabStore } from '../src/lab/storage.js';
 import { LabEvaluationService } from '../src/lab/evaluations.js';
-import { readRuntimeSettings } from '../src/runtime-settings.js';
-import { SupportAssistant } from '../src/service.js';
+import { readRuntimeSettings } from '../src/config/runtime-settings.js';
+import { SupportAssistant } from '../src/support/service.js';
 import { loadDataset } from '../src/evals/data.js';
 import { createApp } from '../src/web/app.js';
-import { PromptRegistry } from '../src/prompt-registry.js';
+import { PromptRegistry } from '../src/prompting/prompt-registry.js';
 import { extendedRegistry } from './fixtures/extended-registry.js';
 
 const input = {

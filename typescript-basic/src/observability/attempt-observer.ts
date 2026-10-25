@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../errors.js';
-import type { LLMProvider, CompletionRequest, CompletionResult } from '../provider-types.js';
-import type { Stage } from '../telemetry.js';
+import type { LLMProvider, CompletionRequest, CompletionResult } from '../llm/provider-types.js';
+import type { Stage } from './telemetry.js';
 import type { FlowDetails } from './events.js';
 import { RunObserver } from './run-observer.js';
 import type { RunInspection } from '../inspection/run-inspection.js';

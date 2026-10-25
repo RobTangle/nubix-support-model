@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { RunObserver } from '../src/observability/run-observer.js';
 import { flowEventSchema, type FlowEvent } from '../src/observability/events.js';
-import { SupportAssistant } from '../src/service.js';
-import { loadPrices } from '../src/budget.js';
-import { loadPrompts } from '../src/prompts.js';
-import type { LLMProvider } from '../src/provider-types.js';
+import { SupportAssistant } from '../src/support/service.js';
+import { loadPrices } from '../src/costs/budget.js';
+import { loadPrompts } from '../src/prompting/prompts.js';
+import type { LLMProvider } from '../src/llm/provider-types.js';
 import { AppError } from '../src/errors.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createEventSink } from '../src/event-sink.js';
+import { createEventSink } from '../src/observability/event-sink.js';
 
 const identity = {
   requestId: '11111111-1111-4111-8111-111111111111',

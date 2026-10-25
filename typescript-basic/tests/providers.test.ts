@@ -6,11 +6,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { ProviderSettings } from '../src/config.js';
+import type { ProviderSettings } from '../src/config/environment.js';
 import { AppError } from '../src/errors.js';
-import type { CompletionRequest } from '../src/provider-types.js';
-import { createProvider } from '../src/providers.js';
-import { responseJsonSchema } from '../src/schemas.js';
+import type { CompletionRequest } from '../src/llm/provider-types.js';
+import { createProvider } from '../src/llm/providers.js';
+import { responseJsonSchema } from '../src/support/schemas.js';
 
 const settings: Record<'openai' | 'xai', ProviderSettings> = {
   openai: { provider: 'openai', apiKey: 'fake-openai-key', model: 'gpt-6-luna' },
@@ -178,7 +178,7 @@ for (const provider of ['openai', 'xai'] as const) {
   });
 
   test(`${provider}: no publica prompts ni credenciales en logs del SDK`, () => {
-    const source = `import { createProvider } from './src/providers.ts';
+    const source = `import { createProvider } from './src/llm/providers.ts';
       const client = createProvider({ provider: '${provider}', apiKey: 'SECRET-KEY', model: '${settings[provider].model}' }, { fetch: async () => Response.json({ id: 'test', status: 'completed', output: [] }) });
       await client.complete({ systemPrompt: 'PRIVATE-MANUAL', userContent: 'PRIVATE-TICKET', responseSchema: { type: 'object' }, schemaName: 'test', maxOutputTokens: 128, signal: new AbortController().signal });`;
     const output = spawnSync(
@@ -222,7 +222,7 @@ test('openai: valida escritura y suma de subconjuntos sin perder totales', async
 });
 
 test('xai: rechaza XAI_DEBUG antes de construir el cliente y no registra secretos', () => {
-  const source = `import { createProvider } from './src/providers.ts';
+  const source = `import { createProvider } from './src/llm/providers.ts';
     try { createProvider({ provider: 'xai', apiKey: 'SECRET-KEY', model: 'grok-4.20-0309-non-reasoning' }, { fetch: async () => { throw Error('NETWORK'); } }); process.exitCode = 2; }
     catch (error) { console.log(error.code); if (process.env.XAI_DEBUG !== '1') process.exitCode = 3; }`;
   const output = execFileSync(

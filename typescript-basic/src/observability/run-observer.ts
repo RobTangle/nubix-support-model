@@ -1,5 +1,5 @@
 import { AppError } from '../errors.js';
-import { waitForTelemetry } from '../telemetry.js';
+import { waitForTelemetry } from './telemetry.js';
 import {
   flowEventSchema,
   type FlowDetails,

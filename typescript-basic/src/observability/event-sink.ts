@@ -5,9 +5,9 @@
  */
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { AppError } from './errors.js';
+import { AppError } from '../errors.js';
 import type { TelemetryEvent } from './telemetry.js';
-import type { FlowEvent } from './observability/events.js';
+import type { FlowEvent } from './events.js';
 import { waitForTelemetry } from './telemetry.js';
 
 /**

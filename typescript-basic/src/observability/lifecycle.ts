@@ -1,8 +1,8 @@
-import type { AssistantOptions, ExecutionContext } from '../execution.js';
+import type { AssistantOptions, ExecutionContext } from '../llm/execution.js';
 import { AppError } from '../errors.js';
-import type { TokenUsage } from '../provider-types.js';
-import { ticketSchema, type Ticket } from '../schemas.js';
-import { emitWithinDeadline, type AttemptTrace } from '../telemetry.js';
+import type { TokenUsage } from '../llm/provider-types.js';
+import { ticketSchema, type Ticket } from '../support/schemas.js';
+import { emitWithinDeadline, type AttemptTrace } from './telemetry.js';
 import type { RunObserver } from './run-observer.js';
 
 /** La entrada externa se valida antes de incorporar cualquier contenido al caso de uso. */

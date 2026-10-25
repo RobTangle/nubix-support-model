@@ -6,9 +6,9 @@ import { AppError } from '../src/errors.js';
 import { LabStore } from '../src/lab/storage.js';
 import { createApp, type WebApplicationOptions } from '../src/web/app.js';
 import { streamFrameSchema } from '../src/web/contracts.js';
-import { SupportAssistant } from '../src/service.js';
-import { loadPrices } from '../src/budget.js';
-import { loadPrompts } from '../src/prompts.js';
+import { SupportAssistant } from '../src/support/service.js';
+import { loadPrices } from '../src/costs/budget.js';
+import { loadPrompts } from '../src/prompting/prompts.js';
 
 const configuration = {
   mode: 'demo' as const,

@@ -3,7 +3,7 @@
  * execution.ts produce los intentos, service-run.ts arma el resumen y un EventSink los recibe.
  * El transporte concreto está en event-sink.ts para mantener estas reglas independientes del disco.
  */
-import { AppError, type ErrorCode } from './errors.js';
+import { AppError, type ErrorCode } from '../errors.js';
 
 /** Telemetría de operación: qué pasó, cuánto tardó y qué consumo pudo contabilizarse. */
 export type Stage = 'input_moderation' | 'generation' | 'output_moderation';

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type ErrorRequestHandler } from 'express';
 import { z } from 'zod';
 import { AppError, publicError } from '../errors.js';
-import type { ProcessOptions, SupportRun } from '../service.js';
+import type { ProcessOptions, SupportRun } from '../support/service.js';
 import type { FlowSink } from '../observability/events.js';
 import { inspectionEntrySchema, type InspectionEntry } from '../inspection/contracts.js';
 import type { LabStore } from '../lab/storage.js';

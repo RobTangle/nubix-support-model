@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppError } from '../src/errors.js';
-import type { CompletionRequest } from '../src/provider-types.js';
-import { GoogleGenAIProvider } from '../src/providers.js';
+import type { CompletionRequest } from '../src/llm/provider-types.js';
+import { GoogleGenAIProvider } from '../src/llm/providers.js';
 
 const request: CompletionRequest = {
   systemPrompt: 'Manual de soporte',

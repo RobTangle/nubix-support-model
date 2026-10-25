@@ -5,11 +5,11 @@
  */
 import { readFile } from 'node:fs/promises';
 
-// src/ y dist/ tienen el mismo padre: fuente y paquete compilado leen los mismos assets.
+// Desde src/resources o dist/resources llegamos al mismo directorio dist/resources/shared.
 // El build copia datos estáticos, no importa ni ejecuta ningún módulo Python.
 /** Lee un recurso distribuido con el proyecto, independientemente del directorio de la terminal. */
 export async function readSharedResource(
   name: 'prices.yaml' | 'datasets/tickets.jsonl' | 'datasets/adversarial.jsonl',
 ): Promise<string> {
-  return readFile(new URL(`../dist/resources/shared/${name}`, import.meta.url), 'utf8');
+  return readFile(new URL(`../../dist/resources/shared/${name}`, import.meta.url), 'utf8');
 }

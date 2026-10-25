@@ -5,10 +5,10 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parse } from 'yaml';
 import { AppError } from '../src/errors.js';
-import type { CompletionResult, LLMProvider } from '../src/provider-types.js';
-import { SupportAssistant, loadPrompt } from '../src/service.js';
-import { loadPrompts } from '../src/prompts.js';
-import { loadPrices } from '../src/budget.js';
+import type { CompletionResult, LLMProvider } from '../src/llm/provider-types.js';
+import { SupportAssistant, loadPrompt } from '../src/support/service.js';
+import { loadPrompts } from '../src/prompting/prompts.js';
+import { loadPrices } from '../src/costs/budget.js';
 
 const answer = {
   answer: 'Soporte lo verificará.',
@@ -37,11 +37,13 @@ function assistant(provider: LLMProvider, deadlineMs = 60_000) {
 }
 
 test('default conserva instrucciones locales y v2 sólo agrega ejemplos independientes', async () => {
-  const base = parse(await readFile(new URL('../src/prompt.yaml', import.meta.url), 'utf8')) as {
+  const base = parse(
+    await readFile(new URL('../src/prompting/prompt.yaml', import.meta.url), 'utf8'),
+  ) as {
     system: string;
   };
   const context = parse(
-    await readFile(new URL('../src/resources/context.yaml', import.meta.url), 'utf8'),
+    await readFile(new URL('../src/prompting/resources/context.yaml', import.meta.url), 'utf8'),
   ) as { manual: string };
   assert.equal(await loadPrompt(), base.system.replaceAll('{{manual}}', context.manual.trimEnd()));
   const v2 = await loadPrompts('basic-v2');

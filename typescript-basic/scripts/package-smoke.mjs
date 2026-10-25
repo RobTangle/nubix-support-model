@@ -39,11 +39,11 @@ try {
       .stdout,
   )[0];
   for (const resource of [
-    'dist/prompt-registry.yaml',
+    'dist/prompting/prompt-registry.yaml',
     'dist/resources/shared/prices.yaml',
     'dist/resources/shared/datasets/tickets.jsonl',
     'dist/resources/shared/datasets/adversarial.jsonl',
-    'dist/resources/safety.yaml',
+    'dist/prompting/resources/safety.yaml',
     'dist/web/public/index.html',
     'dist/web/public/app.js',
     'dist/web/public/styles.css',
@@ -106,10 +106,10 @@ try {
     const {readFile,writeFile}=await import('node:fs/promises');
     const {createRequire}=await import('node:module');
     const {parse,stringify}=createRequire(${JSON.stringify(join(installed, 'package.json'))})('yaml');
-    const registryPath=${JSON.stringify(join(installed, 'dist', 'prompt-registry.yaml'))};
+    const registryPath=${JSON.stringify(join(installed, 'dist', 'prompting', 'prompt-registry.yaml'))};
     const manifest=parse(await readFile(registryPath,'utf8'));
     manifest.prompts.push({id:'smoke-v3',label:'Variante de empaquetado',system:'resources/smoke-v3.yaml'});
-    await writeFile(${JSON.stringify(join(installed, 'dist', 'resources', 'smoke-v3.yaml'))},stringify({version:'smoke-v3',system:'Clasificá la consulta y respetá el manual. {{manual}}'}));
+    await writeFile(${JSON.stringify(join(installed, 'dist', 'prompting', 'resources', 'smoke-v3.yaml'))},stringify({version:'smoke-v3',system:'Clasificá la consulta y respetá el manual. {{manual}}'}));
     await writeFile(registryPath,stringify(manifest));
     const {pathToFileURL}=await import('node:url');
     const registry=await PromptRegistry.load(pathToFileURL(registryPath));

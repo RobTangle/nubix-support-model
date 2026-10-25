@@ -3,9 +3,9 @@
  * Una «ablación» quita un componente para medir su aporte: aquí se compara con y sin moderación.
  * Se mantiene fuera del servicio habitual para que este experimento no amplíe su API pública.
  */
-import type { AssistantOptions, ProcessOptions } from '../execution.js';
-import { safeResponse } from '../schemas.js';
-import { generateProposal, runSession, type SupportRun } from '../service-run.js';
+import type { AssistantOptions, ProcessOptions } from '../llm/execution.js';
+import { safeResponse } from '../support/schemas.js';
+import { generateProposal, runSession, type SupportRun } from '../support/service-run.js';
 
 /**
  * Crea la referencia de comparación (baseline) sin moderación, conservando validación JSON,

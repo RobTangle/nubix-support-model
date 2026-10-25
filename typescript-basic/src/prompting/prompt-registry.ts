@@ -4,13 +4,13 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { AppError } from './errors.js';
+import { AppError } from '../errors.js';
 import {
   promptMetadataSchema,
   promptVersionSchema,
   type PromptMetadata,
 } from './prompt-contracts.js';
-import { supportResponseSchema } from './schemas.js';
+import { supportResponseSchema } from '../support/schemas.js';
 import type { PromptBundle } from './prompts.js';
 
 const text = z.string().min(1);

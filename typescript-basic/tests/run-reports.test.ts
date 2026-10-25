@@ -4,9 +4,9 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { loadPrices } from '../src/budget.js';
-import { loadPrompts } from '../src/prompts.js';
-import { readRuntimeSettings } from '../src/runtime-settings.js';
+import { loadPrices } from '../src/costs/budget.js';
+import { loadPrompts } from '../src/prompting/prompts.js';
+import { readRuntimeSettings } from '../src/config/runtime-settings.js';
 import { RunReportWriter } from '../src/run-reports/writer.js';
 import type { RunReport } from '../src/run-reports/types.js';
 

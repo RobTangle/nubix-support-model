@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { ticketSchema, supportResponseSchema } from '../src/schemas.js';
+import { ticketSchema, supportResponseSchema } from '../src/support/schemas.js';
 
 const cases = JSON.parse(
   await readFile(new URL('../../tests/fixtures/basic-contract.json', import.meta.url), 'utf8'),
