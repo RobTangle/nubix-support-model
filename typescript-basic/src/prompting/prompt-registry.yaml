@@ -1,6 +1,16 @@
+# Catálogo local: este archivo lo lee la aplicación, no se envía al LLM.
+# Cada entrada reúne los archivos independientes de una versión del asistente.
+# Esta revisión identifica el registro; no selecciona basic-v2.
 version: '2'
+# Selección inicial de CLI/UI cuando no elegís otra versión explícitamente.
 default: basic-v1
+# Referencia predeterminada para comparar evals; no cambia el prompt de una request.
 baseline: basic-v1
+# Las rutas son relativas a este registro y pertenecen a versions/<id>/.
+# system: instrucciones de generación (llamada 2, tras permitir la entrada).
+# context: manual insertado en {{manual}} de generación y ambas moderaciones.
+# safety: instrucciones de moderación de entrada/salida, reparación y canario de evals.
+# examples: demostraciones opcionales añadidas a generación; no son llamadas aparte.
 prompts:
   - id: basic-v1
     label: basic-v1 · contexto base

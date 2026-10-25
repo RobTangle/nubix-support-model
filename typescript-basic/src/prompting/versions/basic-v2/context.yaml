@@ -1,3 +1,7 @@
+# Manual ficticio: conocimiento y políticas del negocio para esta versión del asistente.
+# El código lo inserta en {{manual}} de system.yaml y de safety.input/safety.output.
+# Aporta contexto a las tres llamadas; este archivo no genera una request por separado.
+# version identifica el manual: v2 conserva esta revisión mientras su contenido sea igual.
 version: manual-basic-v1
 manual: |
   MANUAL FICTICIO DE EJEMPLO:

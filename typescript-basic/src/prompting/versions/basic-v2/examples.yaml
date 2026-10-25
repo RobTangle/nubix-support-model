@@ -1,3 +1,7 @@
+# Few-shot: demostraciones ticket/respuesta que orientan la generación de esta versión.
+# Se añaden a las instrucciones de la llamada 2, después de system y manual.
+# No entrenan al modelo ni generan una llamada por ejemplo; sí consumen tokens de entrada.
+# No se usan para moderar. Mantenelos separados de los casos del dataset de evaluación.
 version: basic-v2
 examples:
   - ticket: 'En el extracto veo un cargo extra y necesito que lo investiguen.'

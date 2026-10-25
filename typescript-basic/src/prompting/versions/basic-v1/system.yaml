@@ -1,3 +1,6 @@
+# Generación: se usa en la llamada 2 al LLM si la moderación de entrada permite continuar.
+# Define rol, tarea, categorías y respuesta. El ticket viaja separado como dato no confiable.
+# Antes de enviarlo, el código sustituye {{manual}} por el manual de context.yaml.
 version: basic-v1
 system: |
   Sos asistente de soporte de Nubbix, un SaaS para pymes de LATAM.
