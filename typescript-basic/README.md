@@ -74,6 +74,75 @@ El presupuesto estimado predeterminado es USD `0.05` por ticket completo y USD `
 
 Leé la [guía Python ↔ TypeScript](../docs/typescript-python-guide.md) para seguir un ticket, entender Zod y comparar los archivos, las clases, los errores y la concurrencia.
 
+## Diagramas del procesamiento de tickets
+
+Los diagramas usan Mermaid: GitHub los renderiza dentro del README. Los nombres de clases y archivos corresponden a esta implementación TypeScript.
+
+### Recorrido resumido
+
+```mermaid
+flowchart TD
+  A["Ticket desde CLI"] --> B["Validar entrada con Zod"]
+  B --> C["Moderar entrada"]
+  C -->|allow| D["Clasificar y proponer respuesta"]
+  D --> E["Validar contrato y agregar revisión si confidence menor a 0.70"]
+  E --> F["Moderar answer y actions"]
+  F -->|allow| G["Archivar reporte y publicar JSON"]
+  C -->|review, block o refusal| H["Respuesta estática para derivación humana"]
+  F -->|review, block o refusal| H
+  D -->|refusal| H
+  H --> G
+  B -->|entrada inválida| I["Error sanitizado; sin respuesta en stdout"]
+  C & D & F -->|fallo operativo tras intentos permitidos| I
+```
+
+Hay normalmente tres llamadas al LLM. Cada una pasa por el mismo ejecutor, que aplica presupuesto, plazos, validación y hasta dos intentos. Una negativa de seguridad produce una respuesta estática; un fallo técnico produce un error. Las acciones son sugerencias para una persona.
+
+### Recorrido detallado y responsabilidades
+
+```mermaid
+flowchart TD
+  A["cli.ts: leer argumentos o stdin"] --> B{"ticketSchema: entrada válida?"}
+  B -->|no| ERR["AppError sanitizado; exit 2"]
+  B -->|sí| C["Cargar configuración, tarifa, YAML y hashes"]
+  C --> D["RunReportWriter: reservar archivo running antes de consumir API"]
+  D --> E["Crear adaptador SDK y SupportAssistant"]
+  E --> F["runSession: presupuesto y traza locales; deadline de 60 s"]
+  F --> IN["StructuredExecutor: input_moderation"]
+  IN --> IV{"Decisión allow?"}
+  IV -->|no o refusal| SAFE["safeResponse: other, confidence 0, derivación humana"]
+  IV -->|sí| GEN["StructuredExecutor: generation; contrato SupportResponse"]
+  GEN -->|refusal| SAFE
+  GEN --> CF{"confidence menor a 0.70?"}
+  CF -->|sí| HR["Agregar revisión humana; conservar hasta cinco acciones"]
+  CF -->|no| OUT["StructuredExecutor: output_moderation sobre el objeto final"]
+  HR --> OUT
+  OUT --> OV{"Decisión allow?"}
+  OV -->|no o refusal| SAFE
+  OV -->|sí| OK["Conservar propuesta validada"]
+  SAFE & OK --> FIN["Cerrar traza y telemetría; finalizar reporte"]
+  FIN --> PUB["stdout: answer, confidence, category, actions"]
+  C & D & E & F & IN & GEN & OUT -->|error| ERR
+  ERR --> ARCH["Si se reservó reporte, registrar el fallo y la traza disponible"]
+  ARCH --> STOP["stderr: error JSONL; stdout vacío"]
+
+  subgraph EXEC["Dentro de cada llamada de StructuredExecutor"]
+    X1["Comprobar cancelación, plazo y presupuestos"] --> X2["Reservar costo estimado antes de llamar"]
+    X2 --> X3["Adaptador del proveedor: JSON Schema; timeout hasta 15 s"]
+    X3 --> X4["Normalizar estado y tokens; validar JSON con Zod"]
+    X4 --> X5["Conciliar costo o conservar reserva desconocida; emitir evento"]
+    X5 --> X6{"Error transitorio o JSON inválido, y queda un intento?"}
+    X6 -->|sí| X7["Espera acotada o instrucción YAML de reparación"]
+    X7 --> X1
+    X6 -->|no| X8["Devolver valor, refusal o error al servicio"]
+  end
+  IN -.-> X1
+  GEN -.-> X1
+  OUT -.-> X1
+```
+
+El bloque del ejecutor explica las tres cajas de llamadas; sus flechas punteadas representan reutilización, no llamadas adicionales. La telemetría de intentos y cierre contiene sólo metadatos. El reporte manual separado conserva contenido para inspección. Si falla el archivado o el cierre de telemetría, la CLI devuelve error en lugar de publicar la propuesta; los fallos de configuración anteriores a la reserva no crean un reporte.
+
 ## Organización
 
 ```text
@@ -118,3 +187,58 @@ node dist/eval-cli.js compare --provider google-ai --split dev --output-dir repo
 Estos comandos consumen saldo real y conservan los mismos límites y controles que los otros proveedores. Los reportes registran la versión instalada de `@google/genai` en `provenance.sdkVersions["google-ai"]`. Los reportes de pruebas manuales no reemplazan una corrida del dataset ni su revisión humana.
 
 La [guía de evaluaciones TypeScript](../docs/typescript-evaluations.md) explica comandos, métricas, revisión JSONL, criterios de promoción y la comparación de moderación reservada al dataset sintético. Los tests offline prueban el software; no miden la calidad del modelo real.
+
+### Evaluaciones: recorrido resumido
+
+```mermaid
+flowchart TD
+  A["compare: Google AI, basic-v1 y basic-v2, split dev"] --> B["40 tickets y 20 casos de seguridad por versión"]
+  B --> C["EvalRunner: alternar versiones por caso; mismo SupportAssistant"]
+  C --> D["Dos reportes JSON, resúmenes Markdown y plantillas JSONL"]
+  D --> E["Persona: revisar respuestas contra ticket y manual"]
+  E --> F["compare --reports: validar contexto y revisión, offline"]
+  F --> G{"Ambas revisiones completas y alguna candidata elegible?"}
+  G -->|no| H["Revisión pendiente o metas no alcanzadas"]
+  G -->|sí| I["Recomendar por macro-F1, costo y p95"]
+  I --> J["Evaluar la configuración elegida en test"]
+```
+
+`basic-v2` agrega cuatro ejemplos al contexto de `basic-v1`; mantiene manual y políticas. Una comparación completa procesa 120 combinaciones de caso y versión. Habitualmente necesita hasta 360 llamadas iniciales, antes de considerar bloqueos o reintentos. Los USD 5 predeterminados se comparten entre las dos variantes; alcanzar ese límite deja reportes parciales y no acredita una recomendación.
+
+### Evaluaciones: recorrido detallado
+
+```mermaid
+flowchart TD
+  A["eval-cli.ts"] --> MODE{"Comando live u offline?"}
+  MODE -->|run, compare, adversarial| INIT["Validar proveedor, modelo, tarifa y límites"]
+  INIT --> DATA["Validar dataset, splits, IDs y regex; cargar YAML y hashes"]
+  DATA --> PLAN["Crear variantes y presupuesto compartido; reservar reportes con casos notRun"]
+  PLAN --> NEXT["Elegir siguiente caso y variante; alternar orden en compare"]
+  NEXT --> CALL["SupportAssistant.process: mismo flujo que la app"]
+  CALL --> RECORD["Guardar response, trace, error y rawOutputs sintéticos"]
+  RECORD --> RULES["Indicadores sobre salida publicada e intermedia por separado"]
+  RULES --> CHECK["Recalcular métricas y guardar checkpoint"]
+  CHECK --> HALT{"Error fatal, presupuesto agotado o cancelación?"}
+  HALT -->|sí| PART["Registrar stopReason y conservar casos restantes notRun"]
+  HALT -->|no| MORE{"Quedan combinaciones?"}
+  MORE -->|sí| NEXT
+  MORE -->|no| FINISH["Finalizar JSON, Markdown y plantilla reviews.jsonl por variante"]
+  PART --> FINISH
+  FINISH --> HUMAN["Revisión humana: utilidad, corrección, manual, ataques y controles"]
+  HUMAN --> OFF["Cargar reportes y revisiones con Zod"]
+  MODE -->|summarize o compare --reports| OFF
+  OFF --> OP{"Resumir o comparar?"}
+  OP -->|summarize| SUM["Métricas, evaluación humana y gates por corrida"]
+  OP -->|compare --reports| COMPAT{"Dos prompts de dev y mismo contexto?"}
+  COMPAT -->|no| BAD["invalid_report: no comparar experimentos incompatibles"]
+  COMPAT -->|sí| REVIEW{"Faltan campos de revisión aplicables?"}
+  REVIEW -->|sí| PEND["pending_human_review; sin recomendación"]
+  REVIEW -->|no| GATES["Exigir evidencia live, corrida completa, consumo conocido y metas"]
+  GATES --> RANK["Descartar regresiones humanas y de seguridad; ordenar candidatas elegibles"]
+  RANK --> RESULT["Recomendación de dev o acceptance_failed"]
+  RESULT --> TEST["Si hubo recomendación: run del prompt elegido sobre test"]
+```
+
+Las regex son señales, no un juez semántico. La revisión humana decide si un ataque tuvo éxito en la respuesta publicada y si un control benigno fue rechazado injustificadamente. La comparación de prompts sólo recomienda sobre desarrollo; el resultado de prueba requiere su propia revisión y no cambia automáticamente el prompt de la app.
+
+`adversarial --compare-moderation` usa sólo los 20 casos de seguridad y compara `full` contra `generation_only` de un único prompt. Esa ablación omite moderación exclusivamente dentro del arnés; no existe un interruptor para desactivarla en la CLI de tickets.
