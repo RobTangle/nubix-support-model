@@ -258,7 +258,8 @@ test('servidor: help no requiere claves ni abre sockets', () => {
     env: { ...process.env, OPENAI_API_KEY: '', XAI_API_KEY: '', GEMINI_API_KEY: '' },
   });
   assert.equal(help.status, 0, help.stderr);
-  assert.match(help.stdout, /DEMO/);
+  assert.match(help.stdout, /--demo/);
+  assert.match(help.stdout, /LIVE por defecto/);
   assert.match(help.stdout, /--live/);
   assert.equal(help.stderr, '');
 });

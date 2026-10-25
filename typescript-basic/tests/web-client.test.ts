@@ -240,6 +240,48 @@ test('cliente: acepta respuestas válidas extensas con Unicode sin confundir car
   assert.equal(frames.length, 2);
 });
 
+test('cliente: inspecciones mantienen una secuencia independiente y rechazan identidad u orden inválidos', async () => {
+  const inspection = {
+    requestId: id,
+    sequence: 1,
+    timestamp: accepted.receivedAt,
+    kind: 'llm.request',
+    stage: 'generation',
+    attempt: 1,
+    data: { prompt: '<script>bad()</script>' },
+  };
+  const frames = [accepted, { type: 'inspection', inspection }, { type: 'event', event }, result];
+  const received: string[] = [];
+  await readSupportStream(response(frames), new AbortController().signal, (frame) =>
+    received.push(frame.type),
+  );
+  assert.deepEqual(received, ['accepted', 'inspection', 'event', 'result']);
+  for (const changed of [
+    { ...inspection, sequence: 2 },
+    { ...inspection, requestId: '22222222-2222-4222-8222-222222222222' },
+  ]) {
+    await assert.rejects(
+      readSupportStream(
+        response([accepted, { type: 'inspection', inspection: changed }, result]),
+        new AbortController().signal,
+        () => {},
+      ),
+    );
+  }
+  await assert.rejects(
+    readSupportStream(
+      response([
+        accepted,
+        { type: 'inspection', inspection },
+        { type: 'inspection', inspection },
+        result,
+      ]),
+      new AbortController().signal,
+      () => {},
+    ),
+  );
+});
+
 test('vista: identifica actor, tiempos y detalles; renderiza respuestas como texto inerte', () => {
   const dom = new JSDOM(
     '<ol id="timeline"></ol><section id="result"></section><div id="summary"></div>',

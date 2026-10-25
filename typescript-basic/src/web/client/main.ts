@@ -1,6 +1,11 @@
 import { SupportApi, type WebConfiguration } from './api.js';
 import type { StreamFrame } from './stream-reader.js';
 import { TimelineView } from './timeline-view.js';
+import { InspectorView } from './inspector-view.js';
+import { LabApi } from './lab-api.js';
+import { LabController } from './lab-controller.js';
+import { streamFrameSchema } from '../contracts.js';
+import type { LabRunDetail } from '../../lab/contracts.js';
 
 interface Elements {
   form: HTMLFormElement;
@@ -32,11 +37,13 @@ const examples: Record<string, string> = {
 class PlaygroundController {
   private active: AbortController | undefined;
   private configuration: WebConfiguration | undefined;
+  private laboratory: LabController | undefined;
 
   constructor(
     private readonly api: SupportApi,
     private readonly view: TimelineView,
     private readonly elements: Elements,
+    private readonly inspector: InspectorView,
   ) {}
 
   async initialize(): Promise<void> {
@@ -57,6 +64,10 @@ class PlaygroundController {
     try {
       this.configuration = await this.api.configuration();
       this.configure(this.configuration);
+      this.laboratory = new LabController(this.elements.form.ownerDocument, new LabApi(), (run) =>
+        this.restore(run),
+      );
+      this.laboratory.initialize(this.configuration);
     } catch (error) {
       this.elements.status.textContent = 'No se pudo conectar';
       this.view.fail(error instanceof Error ? error.message : 'No se pudo iniciar el panel.');
@@ -112,6 +123,9 @@ class PlaygroundController {
     this.active = new AbortController();
     this.setBusy(true);
     this.view.reset();
+    this.inspector.reset();
+    required('#selected-run-mode').textContent =
+      `${this.configuration.mode.toUpperCase()} · ejecución nueva`;
     this.elements.empty.hidden = true;
     this.elements.count.textContent = '0 eventos';
     this.elements.requestId.textContent = 'Esperando identificador del servidor…';
@@ -132,6 +146,7 @@ class PlaygroundController {
     } finally {
       this.active = undefined;
       this.setBusy(false);
+      void this.laboratory?.refresh();
     }
   }
 
@@ -144,6 +159,8 @@ class PlaygroundController {
       this.elements.count.textContent = `${frame.event.sequence} eventos`;
       if (this.elements.follow.checked)
         this.elements.viewport.scrollTop = this.elements.viewport.scrollHeight;
+    } else if (frame.type === 'inspection') {
+      this.inspector.append(frame.inspection);
     } else if (frame.type === 'result') {
       this.view.complete(frame);
       this.elements.status.textContent = frame.trace.abstained
@@ -155,6 +172,44 @@ class PlaygroundController {
       this.elements.status.textContent = `Ejecución fallida · ${frame.error.code}`;
       this.view.fail(frame.error.message);
     }
+  }
+
+  private restore(run: LabRunDetail): void {
+    if (this.active)
+      throw new Error('Esperá a que termine la consulta activa antes de abrir otra ejecución.');
+    this.view.reset();
+    this.inspector.reset();
+    this.elements.empty.hidden = true;
+    this.elements.requestId.textContent = run.id;
+    this.elements.count.textContent = `${run.events.length} eventos guardados`;
+    this.elements.status.textContent = `Historial · ${run.status} · ${run.createdAt}`;
+    required('#selected-run-mode').textContent =
+      `${run.mode.toUpperCase()} · ejecución guardada · ${run.status}`;
+    for (const event of run.events) this.view.append(event);
+    for (const entry of run.inspections) this.inspector.append(entry);
+    if (
+      run.input &&
+      typeof run.input === 'object' &&
+      !Array.isArray(run.input) &&
+      typeof run.input.text === 'string'
+    )
+      this.elements.ticket.value = run.input.text;
+    const saved =
+      run.result && typeof run.result === 'object' && !Array.isArray(run.result) ? run.result : {};
+    const frame = streamFrameSchema.safeParse({
+      type: 'result',
+      requestId: run.id,
+      mode: run.mode,
+      response: saved.response,
+      trace: saved.trace,
+    });
+    if (frame.success && frame.data.type === 'result') this.view.complete(frame.data);
+    else
+      this.view.fail(
+        run.error
+          ? `${run.error.code}: ${run.error.message}`
+          : `Estado guardado: ${run.status}. No hay una respuesta final publicada.`,
+      );
   }
 
   private setBusy(busy: boolean): void {
@@ -176,20 +231,26 @@ function required<T extends HTMLElement>(selector: string): T {
 }
 
 const view = new TimelineView(required('#timeline'), required('#result'), required('#run-summary'));
-const controller = new PlaygroundController(new SupportApi(), view, {
-  form: required('#support-form'),
-  ticket: required('#ticket'),
-  provider: required('#provider'),
-  prompt: required('#prompt-version'),
-  run: required('#run-button'),
-  cancel: required('#cancel-button'),
-  mode: required('#mode-label'),
-  description: required('#mode-description'),
-  status: required('#status-message'),
-  requestId: required('#run-id'),
-  count: required('#event-count'),
-  empty: required('#timeline-empty'),
-  viewport: required('#timeline-viewport'),
-  follow: required('#follow-events'),
-});
+const inspector = new InspectorView(required('#inspections'));
+const controller = new PlaygroundController(
+  new SupportApi(),
+  view,
+  {
+    form: required('#support-form'),
+    ticket: required('#ticket'),
+    provider: required('#provider'),
+    prompt: required('#prompt-version'),
+    run: required('#run-button'),
+    cancel: required('#cancel-button'),
+    mode: required('#mode-label'),
+    description: required('#mode-description'),
+    status: required('#status-message'),
+    requestId: required('#run-id'),
+    count: required('#event-count'),
+    empty: required('#timeline-empty'),
+    viewport: required('#timeline-viewport'),
+    follow: required('#follow-events'),
+  },
+  inspector,
+);
 void controller.initialize();

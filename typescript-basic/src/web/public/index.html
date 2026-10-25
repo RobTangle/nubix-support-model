@@ -26,6 +26,40 @@
             consumo, a medida que ocurren.
           </p>
         </section>
+        <nav class="lab-navigation" aria-label="Secciones del laboratorio">
+          <a href="#ticket-title">Ejecutar soporte</a><a href="#history-panel">Historial local</a
+          ><a href="#inspector-panel">Inspector de datos</a
+          ><a href="#evaluation-panel">Evaluaciones</a>
+        </nav>
+        <section id="history-panel" class="panel lab-panel" aria-labelledby="history-title">
+          <div class="panel-heading">
+            <span class="section-number">H</span>
+            <h2 id="history-title">Historial persistente</h2>
+          </div>
+          <p class="field-help">
+            Las ejecuciones se conservan localmente al recargar. Abrirlas sólo consulta datos
+            guardados: no llama al LLM. Cada fila identifica su modalidad y estado.
+          </p>
+          <div class="history-controls">
+            <label for="history-kind">Tipo de ejecución</label>
+            <select id="history-kind">
+              <option value="support">Tickets de soporte</option>
+              <option value="evaluation">Evaluaciones</option>
+            </select>
+            <button id="history-refresh" class="secondary-button" type="button">
+              Recargar historial
+            </button>
+          </div>
+          <p id="history-status" role="status" aria-live="polite">Conectando…</p>
+          <div id="history-list" class="history-list" aria-label="Ejecuciones guardadas"></div>
+          <div class="history-pagination">
+            <button id="history-previous" class="secondary-button" type="button" disabled>
+              Anterior</button
+            ><button id="history-next" class="secondary-button" type="button" disabled>
+              Siguiente
+            </button>
+          </div>
+        </section>
         <div class="workspace">
           <aside class="control-column">
             <section class="panel ticket-panel" aria-labelledby="ticket-title">
@@ -103,6 +137,9 @@ Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar l
               <span class="run-label">REQUEST ID</span
               ><code id="run-id">Se asignará al ejecutar</code>
             </div>
+            <p id="selected-run-mode" class="selected-run-mode">
+              Todavía no hay una ejecución seleccionada
+            </p>
             <div class="timeline-options">
               <p>Timestamp UTC · tiempo transcurrido · duración</p>
               <label><input id="follow-events" type="checkbox" checked /> Seguir eventos</label>
@@ -140,6 +177,77 @@ Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar l
               La respuesta final aparecerá cuando termine una ejecución válida.
             </p>
           </div>
+        </section>
+        <section id="inspector-panel" class="panel lab-panel" aria-labelledby="inspector-title">
+          <div class="panel-heading">
+            <span class="section-number">04</span>
+            <h2 id="inspector-title">Inspector de datos por etapa</h2>
+          </div>
+          <p class="debug-warning">
+            Depuración local: incluye body, entrada normalizada, schemas, requests y respuestas del
+            LLM. Puede contener propuestas sin moderar. Esta sección está separada del resultado
+            publicado y presenta todo como texto.
+          </p>
+          <div
+            id="inspections"
+            class="inspection-list"
+            aria-label="Datos de depuración de la ejecución seleccionada"
+          ></div>
+        </section>
+        <section id="evaluation-panel" class="panel lab-panel" aria-labelledby="evaluation-title">
+          <div class="panel-heading">
+            <span class="section-number">05</span>
+            <h2 id="evaluation-title">Evaluaciones y revisión humana</h2>
+          </div>
+          <p id="evaluation-mode" class="selected-run-mode">Cargando modalidad del servidor…</p>
+          <p class="field-help">
+            El trabajo continúa en el servidor si cerrás o recargás esta página. Reabrilo desde el
+            historial de evaluaciones. Sólo el botón Cancelar trabajo solicita detenerlo.
+          </p>
+          <form id="evaluation-form" class="evaluation-form">
+            <label>Proveedor y modelo<select id="evaluation-provider" required></select></label>
+            <label
+              >Operación<select id="evaluation-operation">
+                <option value="run">Evaluar un prompt</option>
+                <option value="compare">Comparar basic-v1 y basic-v2</option>
+                <option value="adversarial">Suite adversarial</option>
+              </select></label
+            >
+            <label
+              >Prompt<select id="evaluation-prompt">
+                <option value="basic-v1">basic-v1</option>
+                <option value="basic-v2">basic-v2</option>
+              </select></label
+            >
+            <label
+              >Partición<select id="evaluation-split">
+                <option value="dev">dev · desarrollo y selección</option>
+                <option value="test">test · validación reservada</option>
+              </select></label
+            >
+            <label class="checkbox-label"
+              ><input id="evaluation-moderation" type="checkbox" /> Comparar con/sin moderación
+              (comparten presupuesto)</label
+            >
+            <div class="form-actions">
+              <button id="evaluation-start" class="primary-button" type="submit" disabled>
+                Iniciar evaluación</button
+              ><button id="evaluation-cancel" class="secondary-button" type="button" disabled>
+                Cancelar trabajo
+              </button>
+            </div>
+          </form>
+          <p class="budget-explanation">
+            Presupuesto predeterminado: USD 5 por trabajo; USD 0,05 por ticket. La reserva
+            preventiva de presupuesto aparta saldo antes de llamar al proveedor: no es un cargo. El
+            costo real estimado conocido se calcula con el uso recibido y el tarifario; una reserva
+            de consumo desconocido cubre llamadas sin uso confirmado.
+          </p>
+          <p id="evaluation-status" role="status" aria-live="polite">
+            Listo para configurar una evaluación.
+          </p>
+          <code id="evaluation-id" class="evaluation-id"></code>
+          <div id="evaluation-results" class="evaluation-results"></div>
         </section>
       </main>
       <footer>

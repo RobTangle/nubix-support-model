@@ -36,6 +36,7 @@ export async function readSupportStream(
   let requestId: string | undefined;
   let mode: string | undefined;
   let sequence = 0;
+  let inspectionSequence = 0;
   let elapsed = 0;
   let count = 0;
   let terminal: StreamFrame | undefined;
@@ -53,13 +54,21 @@ export async function readSupportStream(
       requestId = frame.requestId;
       mode = frame.mode;
     } else {
-      const id = frame.type === 'event' ? frame.event.requestId : frame.requestId;
+      const id =
+        frame.type === 'event'
+          ? frame.event.requestId
+          : frame.type === 'inspection'
+            ? frame.inspection.requestId
+            : frame.requestId;
       if (!requestId || id !== requestId) throw new StreamProtocolError();
       if (frame.type === 'event') {
         if (frame.event.sequence !== sequence + 1 || frame.event.elapsedMs < elapsed)
           throw new StreamProtocolError();
         sequence = frame.event.sequence;
         elapsed = frame.event.elapsedMs;
+      } else if (frame.type === 'inspection') {
+        if (frame.inspection.sequence !== inspectionSequence + 1) throw new StreamProtocolError();
+        inspectionSequence = frame.inspection.sequence;
       } else {
         if (frame.type === 'result' && (frame.mode !== mode || frame.trace.requestId !== requestId))
           throw new StreamProtocolError();

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { loadPrices } from '../budget.js';
 import { readEnvironment, readSettings } from '../config.js';
 import { AppError, publicError } from '../errors.js';
@@ -10,6 +12,9 @@ import { loadPrompts, type PromptVersion } from '../prompts.js';
 import { createProvider } from '../providers.js';
 import { readRuntimeSettings } from '../runtime-settings.js';
 import { SupportAssistant } from '../service.js';
+import { createGenerationOnlyBaseline } from '../evals/ablation.js';
+import { LabStore } from '../lab/storage.js';
+import { LabEvaluationService } from '../lab/evaluations.js';
 import type { TelemetryEvent } from '../telemetry.js';
 import { createApp } from './app.js';
 import { DemoProvider } from './demo-provider.js';
@@ -23,9 +28,9 @@ const defaults = {
 const labels = { openai: 'OpenAI', xai: 'xAI', 'google-ai': 'Google AI' };
 const keys = { openai: 'OPENAI_API_KEY', xai: 'XAI_API_KEY', 'google-ai': 'GEMINI_API_KEY' };
 const help = `Nubbix: panel local de observabilidad.
-Uso: node dist/web/server.js [--port 3000] [--live] [--env-file archivo] [--telemetry-file eventos.jsonl]
-Sin --live usa un proveedor DEMO simulado: no necesita claves ni consume API.
---live habilita llamadas reales para proveedores con claves configuradas y consume saldo.
+Uso: node dist/web/server.js [--port 3000] [--demo] [--env-file archivo] [--database archivo.sqlite] [--telemetry-file eventos.jsonl]
+LIVE por defecto: usa las claves configuradas y consume saldo al enviar tickets/evaluaciones.
+--demo usa un proveedor simulado sin consumo de API. --live se conserva como alias explícito.
 El servidor se vincula únicamente a 127.0.0.1; no es un servicio público autenticado.
 Los eventos de metadatos se escriben en stderr y opcionalmente en --telemetry-file.
 `;
@@ -41,6 +46,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       options: {
         port: { type: 'string', default: '3000' },
         live: { type: 'boolean' },
+        demo: { type: 'boolean' },
+        database: { type: 'string' },
         'env-file': { type: 'string' },
         'telemetry-file': { type: 'string' },
         help: { type: 'boolean' },
@@ -55,20 +62,22 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   }
   if (!/^\d+$/u.test(values.port) || Number(values.port) < 1 || Number(values.port) > 65535)
     throw new AppError('invalid_arguments');
-  const environment = values.live ? await readEnvironment(values['env-file']) : {};
+  if (values.live && values.demo) throw new AppError('invalid_arguments');
+  const live = !values.demo;
+  const environment = live ? await readEnvironment(values['env-file']) : {};
   const prices = await loadPrices();
   const prompts = {
     'basic-v1': await loadPrompts('basic-v1'),
     'basic-v2': await loadPrompts('basic-v2'),
   };
-  const settings = readRuntimeSettings(values.live ? environment : {});
+  const settings = readRuntimeSettings(environment);
   const clients = new Map<WebProvider, ReturnType<typeof createProvider>>();
   const models = new Map<WebProvider, string>();
   const configuration: WebConfiguration = {
-    mode: values.live ? 'live' : 'demo',
+    mode: live ? 'live' : 'demo',
     providers: (Object.keys(defaults) as WebProvider[]).map((provider) => {
-      const available = !values.live || Boolean(environment[keys[provider]]?.trim());
-      const selected = values.live && available ? readSettings(provider, environment) : null;
+      const available = !live || Boolean(environment[keys[provider]]?.trim());
+      const selected = live && available ? readSettings(provider, environment) : null;
       const model = selected?.model ?? defaults[provider];
       if (available) prices.get(provider, model);
       if (selected) clients.set(provider, createProvider(selected));
@@ -78,14 +87,48 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     promptVersions: ['basic-v1', 'basic-v2'],
     maxConcurrent: 4,
   };
-  if (values.live && !configuration.providers.some((provider) => provider.available))
+  if (live && !configuration.providers.some((provider) => provider.available))
     throw new AppError('missing_key');
+  const databasePath =
+    values.database ?? fileURLToPath(new URL('../../data/lab.sqlite', import.meta.url));
+  await mkdir(dirname(databasePath), { recursive: true });
+  const store = new LabStore(databasePath);
   const sink = await createEventSink<TelemetryEvent | FlowEvent>(values['telemetry-file']);
+  const evaluations = new LabEvaluationService({
+    store,
+    mode: configuration.mode,
+    models: new Map(
+      configuration.providers
+        .filter((provider) => provider.available)
+        .map((provider) => [provider.id, provider.model]),
+    ),
+    settings,
+    prices,
+    outputDir: fileURLToPath(new URL('../../reports/lab-evals/', import.meta.url)),
+    factory(provider, context) {
+      const client = live ? clients.get(provider) : new DemoProvider();
+      if (!client) throw new AppError('missing_key');
+      const options = {
+        provider: client,
+        providerName: provider,
+        model: models.get(provider)!,
+        prompts: context.prompts,
+        prices,
+        settings,
+        emit: sink.emit,
+      };
+      return context.mode === 'generation_only'
+        ? createGenerationOnlyBaseline(options)
+        : new SupportAssistant(options);
+    },
+  });
   const app = createApp({
     configuration,
+    store,
+    evaluations,
     observe: sink.emit,
     createAssistant(provider: WebProvider, version: PromptVersion) {
-      const client = values.live ? clients.get(provider) : new DemoProvider();
+      const client = live ? clients.get(provider) : new DemoProvider();
       if (!client) throw new AppError('missing_key');
       return new SupportAssistant({
         provider: client,
@@ -110,6 +153,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   });
   const closeTelemetry = async (): Promise<void> => {
     try {
+      await app.drain();
+      await evaluations.close();
+      store.close();
       await sink.close(AbortSignal.timeout(1000));
     } catch {
       process.stderr.write(JSON.stringify(publicError(new AppError('telemetry_error'))) + '\n');

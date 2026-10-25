@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express, { type ErrorRequestHandler } from 'express';
+import { z } from 'zod';
 import { AppError, publicError } from '../errors.js';
 import type { ProcessOptions, SupportRun } from '../service.js';
 import type { FlowSink } from '../observability/events.js';
+import { inspectionEntrySchema, type InspectionEntry } from '../inspection/contracts.js';
+import type { LabStore } from '../lab/storage.js';
+import type { LabEvaluationService } from '../lab/evaluations.js';
+import { evaluationRoutes } from './evaluation-routes.js';
+import { RequestTracker } from './request-tracker.js';
 import { HttpEventStream } from './http-stream.js';
 import {
   webConfigurationSchema,
@@ -25,6 +31,8 @@ export interface WebApplicationOptions {
   maxConcurrent?: number;
   observe?: FlowSink;
   streamTimeoutMs?: number;
+  store?: LabStore;
+  evaluations?: LabEvaluationService;
 }
 
 /** Adaptador HTTP: sólo conoce transporte y límites; el caso de uso sigue en SupportAssistant. */
@@ -34,6 +42,7 @@ export function createApp(options: WebApplicationOptions) {
     maxConcurrent: options.maxConcurrent ?? options.configuration.maxConcurrent,
   });
   const app = express();
+  const requests = new RequestTracker();
   const timeoutMs = options.streamTimeoutMs ?? 60_000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000)
     throw new AppError('configuration_error');
@@ -71,8 +80,58 @@ export function createApp(options: WebApplicationOptions) {
     next();
   });
   app.use(express.json({ limit: '128kb', strict: true }));
+  if (options.evaluations) app.use('/api/evaluations', evaluationRoutes(options.evaluations));
   app.get('/api/config', (_request, response) => {
     response.json(configuration);
+  });
+  app.get('/api/history', (request, response) => {
+    const parsed = z
+      .strictObject({
+        kind: z.enum(['support', 'evaluation']).optional(),
+        limit: z
+          .string()
+          .regex(/^\d+$/u)
+          .transform(Number)
+          .pipe(z.number().int().min(1).max(100))
+          .optional(),
+        offset: z
+          .string()
+          .regex(/^\d+$/u)
+          .transform(Number)
+          .pipe(z.number().int().min(0).max(1_000_000))
+          .optional(),
+      })
+      .safeParse(request.query);
+    if (!parsed.success) {
+      response.status(400).json(publicError(new AppError('invalid_input')));
+      return;
+    }
+    try {
+      response.json(
+        options.store?.listRuns({
+          ...(parsed.data.kind ? { kind: parsed.data.kind } : {}),
+          ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
+          ...(parsed.data.offset !== undefined ? { offset: parsed.data.offset } : {}),
+        }) ?? { items: [], total: 0 },
+      );
+    } catch {
+      response.status(503).json(publicError(new AppError('report_error')));
+    }
+  });
+  app.get('/api/history/:id', (request, response) => {
+    try {
+      const id = z.uuid().safeParse(request.params.id);
+      const detail = id.success ? options.store?.getRun(id.data) : null;
+      if (!detail) {
+        response
+          .status(404)
+          .json({ error: { code: 'not_found', message: 'Recurso no encontrado.' } });
+        return;
+      }
+      response.json(detail);
+    } catch {
+      response.status(503).json(publicError(new AppError('report_error')));
+    }
   });
   app.post('/api/support/stream', async (request, response) => {
     const parsed = webRequestSchema.safeParse(request.body);
@@ -94,10 +153,27 @@ export function createApp(options: WebApplicationOptions) {
       });
       return;
     }
-    active++;
     const requestId = randomUUID();
     const receivedAt = new Date().toISOString();
+    try {
+      options.store?.createRun({
+        id: requestId,
+        kind: 'support',
+        mode: configuration.mode,
+        provider: parsed.data.provider,
+        model: configuration.providers.find((provider) => provider.id === parsed.data.provider)!
+          .model,
+        promptVersion: parsed.data.promptVersion,
+        input: request.body,
+      });
+    } catch {
+      response.status(503).json(publicError(new AppError('report_error')));
+      return;
+    }
+    active++;
+    let persistedTerminal = false;
     const controller = new AbortController();
+    const finishRequest = requests.track(controller);
     const deadline = AbortSignal.timeout(timeoutMs);
     const signal = AbortSignal.any([controller.signal, deadline]);
     const onClose = (): void => {
@@ -109,23 +185,56 @@ export function createApp(options: WebApplicationOptions) {
       .set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'X-Accel-Buffering': 'no' });
     response.flushHeaders();
     const stream = new HttpEventStream(response, signal);
+    let inspectionSequence = 0;
+    // El borde HTTP agrega su body al canal de inspección; renumera ese canal completo
+    // sin cambiar los contadores ni el contrato de eventos del caso de uso.
+    const inspect = async (entry: InspectionEntry): Promise<void> => {
+      const inspection = { ...entry, sequence: ++inspectionSequence };
+      options.store?.appendInspection(requestId, inspection);
+      await stream.write({ type: 'inspection', inspection });
+    };
     try {
       await stream.write({ type: 'accepted', requestId, mode: configuration.mode, receivedAt });
+      await inspect(
+        inspectionEntrySchema.parse({
+          requestId,
+          sequence: 1,
+          timestamp: receivedAt,
+          kind: 'http.request',
+          data: {
+            body: request.body,
+            schema: z.toJSONSchema(webRequestSchema),
+            localRules: {
+              maxUnicodePointsBeforeTrim: 8000,
+              bodyLimitBytes: 131072,
+              sameOriginOnly: true,
+            },
+          },
+        }),
+      );
       const assistant = await options.createAssistant(
         parsed.data.provider,
         parsed.data.promptVersion,
       );
       const result = await assistant.process(
-        { text: parsed.data.text },
+        { text: request.body.text },
         {
           requestId,
           signal,
           observe: async (event, eventSignal) => {
+            options.store?.appendEvent(requestId, event);
             await options.observe?.(event, eventSignal);
             await stream.write({ type: 'event', event });
           },
+          inspect,
         },
       );
+      if (signal.aborted)
+        throw new AppError(deadline.aborted ? 'deadline_exceeded' : 'cancelled', {
+          trace: result.trace,
+        });
+      options.store?.finishRun(requestId, { status: 'completed', result });
+      persistedTerminal = true;
       await stream.write({
         type: 'result',
         requestId,
@@ -134,6 +243,25 @@ export function createApp(options: WebApplicationOptions) {
         trace: result.trace,
       });
     } catch (error) {
+      let safe = publicError(
+        deadline.aborted
+          ? new AppError('deadline_exceeded')
+          : controller.signal.aborted
+            ? new AppError('cancelled')
+            : error,
+      ).error;
+      if (!persistedTerminal) {
+        try {
+          options.store?.finishRun(requestId, {
+            status: controller.signal.aborted ? 'cancelled' : 'failed',
+            result: error instanceof AppError && error.trace ? { trace: error.trace } : null,
+            error: safe,
+          });
+          persistedTerminal = true;
+        } catch {
+          safe = publicError(new AppError('report_error')).error;
+        }
+      }
       if (!controller.signal.aborted && !response.destroyed) {
         try {
           // El deadline del trabajo venció, pero un cliente conectado todavía puede recibir
@@ -142,8 +270,7 @@ export function createApp(options: WebApplicationOptions) {
             {
               type: 'error',
               requestId,
-              error: publicError(deadline.aborted ? new AppError('deadline_exceeded') : error)
-                .error,
+              error: safe,
             },
             AbortSignal.timeout(500),
           );
@@ -155,6 +282,7 @@ export function createApp(options: WebApplicationOptions) {
       active--;
       response.removeListener('close', onClose);
       if (!response.destroyed) response.end();
+      finishRequest();
     }
   });
   app.use(
@@ -171,5 +299,5 @@ export function createApp(options: WebApplicationOptions) {
     response.status(tooLarge ? 413 : 400).json(publicError(new AppError('invalid_input')));
   };
   app.use(errorHandler);
-  return app;
+  return Object.assign(app, { drain: () => requests.drain() });
 }

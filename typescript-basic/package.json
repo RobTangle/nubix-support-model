@@ -26,6 +26,7 @@
     "start": "node dist/cli.js",
     "build": "tsc && node scripts/copy-prompt.mjs && node scripts/build-web.mjs",
     "web": "npm run build && node dist/web/server.js",
+    "web:demo": "npm run build && node dist/web/server.js --demo",
     "web:live": "npm run build && node dist/web/server.js --live",
     "serve:web": "node dist/web/server.js",
     "smoke:package": "npm run build && node scripts/package-smoke.mjs",

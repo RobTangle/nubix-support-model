@@ -117,8 +117,10 @@ try {
     assert.equal(report.provider,'google-ai');
     const {createApp}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'web', 'app.js')).href)});
     const {DemoProvider}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'web', 'demo-provider.js')).href)});
+    const {LabStore}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'lab', 'storage.js')).href)});
+    const store=new LabStore(${JSON.stringify(join(temporary, 'smoke.sqlite'))});
     const prompts=await loadPrompts();
-    const app=createApp({configuration:{mode:'demo',providers:[{id:'google-ai',label:'Google AI',model:'gemini-3.5-flash-lite',available:true}],promptVersions:['basic-v1','basic-v2'],maxConcurrent:2},createAssistant:()=>new SupportAssistant({provider:new DemoProvider(),providerName:'google-ai',model:'gemini-3.5-flash-lite',prompts,prices,settings})});
+    const app=createApp({store,configuration:{mode:'demo',providers:[{id:'google-ai',label:'Google AI',model:'gemini-3.5-flash-lite',available:true}],promptVersions:['basic-v1','basic-v2'],maxConcurrent:2},createAssistant:()=>new SupportAssistant({provider:new DemoProvider(),providerName:'google-ai',model:'gemini-3.5-flash-lite',prompts,prices,settings})});
     const server=app.listen(0,'127.0.0.1');
     await new Promise(resolve=>server.once('listening',resolve));
     try {
@@ -131,8 +133,17 @@ try {
       assert.equal(frames.at(-1).type,'result');
       assert.equal(frames.at(-1).mode,'demo');
       assert.equal(frames.filter(frame=>frame.type==='event'&&frame.event.event==='llm.request.started').length,3);
+      assert.equal(frames.filter(frame=>frame.type==='inspection'&&frame.inspection.kind==='llm.response').length,3);
+      const history=await (await fetch(origin+'/api/history')).json();
+      assert.equal(history.total,1);
+      const detail=await (await fetch(origin+'/api/history/'+history.items[0].id)).json();
+      assert.equal(detail.status,'completed');
+      assert.equal(detail.result.response.category,'billing');
+      assert.ok(detail.inspections.some(entry=>entry.kind==='input.validated'));
     } finally {
       await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});
+      await app.drain();
+      store.close();
     }
   `;
   const fixturePath = join(temporary, 'eval-smoke.mjs');

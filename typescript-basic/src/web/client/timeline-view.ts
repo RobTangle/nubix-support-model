@@ -6,7 +6,7 @@ const titles: Record<FlowEventName, string> = {
   'input.validation.started': 'Validando entrada',
   'input.validation.completed': 'Entrada validada',
   'input.validation.failed': 'Entrada rechazada',
-  'budget.reserved': 'Presupuesto reservado',
+  'budget.reserved': 'Reserva preventiva de presupuesto',
   'llm.request.started': 'Request al LLM enviada',
   'llm.request.completed': 'Respuesta del LLM recibida',
   'llm.request.failed': 'Request al LLM fallida',
@@ -129,10 +129,10 @@ export class TimelineView {
     raw.append(caption, content);
     this.result.replaceChildren(title, tags, answer, actions, raw);
     const cost = frame.trace.knownCostUsd;
-    const qualifier = frame.mode === 'demo' ? 'Costo simulado' : 'Costo estimado conocido';
+    const qualifier = frame.mode === 'demo' ? 'Costo simulado' : 'Costo real estimado conocido';
     const requests =
       this.requests === 1 ? '1 request LLM observada' : `${this.requests} requests LLM observadas`;
-    this.summary.textContent = `${frame.trace.latencyMs.toFixed(0)} ms de servicio · ${requests} · ${qualifier}: USD ${cost} · reserva desconocida: USD ${frame.trace.reservedUnknownUsd}`;
+    this.summary.textContent = `${frame.trace.latencyMs.toFixed(0)} ms de servicio · ${requests} · ${qualifier}: USD ${cost} · reserva de consumo desconocido: USD ${frame.trace.reservedUnknownUsd}`;
   }
 
   fail(message: string): void {

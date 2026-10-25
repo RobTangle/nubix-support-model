@@ -14,6 +14,237 @@
   --border: #dbe4ef;
   --blue: #215de7;
 }
+.lab-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.lab-navigation a {
+  padding: 10px 14px;
+  background: #e5edf8;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+}
+.lab-panel {
+  padding: 26px;
+  margin: 22px 0;
+  min-width: 0;
+  scroll-margin-top: 20px;
+}
+.history-controls,
+.history-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.history-controls select {
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+}
+.history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 290px;
+  overflow: auto;
+  margin: 14px 0;
+}
+.history-entry {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: #f7faff;
+  color: #18324b;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.history-entry:hover,
+.history-entry:focus-visible {
+  border-color: var(--blue);
+  background: #edf3ff;
+}
+.selected-run-mode {
+  padding: 0 24px;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.lab-panel .selected-run-mode {
+  padding: 0;
+}
+.debug-warning {
+  color: #805015;
+  background: #fff6e7;
+  padding: 12px 14px;
+  border: 1px solid #ecd4af;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.inspection-list {
+  display: grid;
+  gap: 10px;
+  max-height: 660px;
+  overflow: auto;
+}
+.lab-panel details {
+  background: #f8faff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 10px 0;
+}
+.lab-panel summary {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.lab-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 500px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.evaluation-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 22px;
+  margin-top: 20px;
+}
+.evaluation-form label {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+}
+.evaluation-form select {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+.evaluation-form .checkbox-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.evaluation-form .form-actions {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+.budget-explanation {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  border-left: 3px solid #9bb6dd;
+  padding-left: 14px;
+}
+.evaluation-id {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.evaluation-report {
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+  padding-top: 12px;
+}
+.evaluation-report h3 {
+  line-height: 1.7;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.evaluation-report p,
+.evaluation-progress {
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.published-case-response {
+  background: #eaf5ee;
+  padding: 14px;
+  border-radius: 7px;
+  white-space: pre-wrap;
+}
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.table-scroll caption {
+  text-align: left;
+  font-weight: 700;
+  padding: 10px 0;
+}
+.table-scroll th,
+.table-scroll td {
+  text-align: left;
+  border: 1px solid var(--border);
+  padding: 9px;
+}
+.table-scroll thead {
+  background: #edf3fc;
+}
+.review-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+  padding: 16px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.review-form > p,
+.review-form > label:has(textarea) {
+  grid-column: 1 / -1;
+}
+.review-form > label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.review-form select,
+.review-form textarea {
+  width: 100%;
+  margin: 0;
+}
+.review-form button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+@media (max-width: 740px) {
+  .lab-panel {
+    padding: 18px;
+  }
+  .evaluation-form,
+  .review-form {
+    grid-template-columns: 1fr;
+  }
+  .history-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .history-controls select {
+    width: 100%;
+  }
+  .selected-run-mode {
+    padding: 0 18px;
+  }
+}
 * {
   box-sizing: border-box;
 }

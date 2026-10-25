@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { flowEventSchema } from '../observability/events.js';
 import { supportResponseSchema, ticketSchema } from '../schemas.js';
+import { inspectionEntrySchema } from '../inspection/contracts.js';
 
 export const webProviderSchema = z.enum(['openai', 'xai', 'google-ai']);
 export const webPromptSchema = z.enum(['basic-v1', 'basic-v2']);
@@ -64,6 +65,8 @@ export const streamFrameSchema = z.discriminatedUnion('type', [
     receivedAt: z.iso.datetime(),
   }),
   z.strictObject({ type: z.literal('event'), event: flowEventSchema }),
+  // Datos de depuración potencialmente no moderados: nunca representan una respuesta aprobada.
+  z.strictObject({ type: z.literal('inspection'), inspection: inspectionEntrySchema }),
   z.strictObject({
     type: z.literal('result'),
     requestId: z.uuid(),
