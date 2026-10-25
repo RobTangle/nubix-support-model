@@ -15,3 +15,7 @@ dist/
 !.env.example
 reports/
 .superpowers/
+node_modules/
+.npm-cache/
+coverage/
+*.tgz

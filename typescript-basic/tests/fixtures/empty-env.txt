@@ -1,0 +1,1 @@
+# El test usa este archivo explícito para nunca cargar las claves locales del usuario.

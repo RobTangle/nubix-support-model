@@ -1,0 +1,161 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+import { z } from 'zod';
+import { Budget, type PriceCatalog } from './budget.js';
+import { AppError } from './errors.js';
+import type { LLMProvider, TokenUsage } from './provider-types.js';
+import type { PromptBundle } from './prompts.js';
+import type { RuntimeSettings } from './runtime-settings.js';
+import type { CapturedOutput, EventSink, RunTrace, Stage, AttemptTrace } from './telemetry.js';
+import { emitWithinDeadline } from './telemetry.js';
+
+export interface AssistantOptions {
+  provider: LLMProvider;
+  providerName: string;
+  model: string;
+  prompts: PromptBundle;
+  prices: PriceCatalog;
+  settings?: Partial<RuntimeSettings>;
+  emit?: EventSink;
+}
+export interface ProcessOptions {
+  signal?: AbortSignal;
+  batchBudget?: Budget;
+  /** Captura explícita para evaluaciones y reportes de testing; no forma parte de la telemetría. */
+  capture?: (output: CapturedOutput) => void;
+}
+export interface ExecutionContext {
+  trace: RunTrace;
+  deadline: number;
+  signal: AbortSignal;
+  budgets: Budget[];
+  settings: RuntimeSettings;
+  capture?: (output: CapturedOutput) => void;
+}
+
+/** Un único algoritmo de llamadas para moderación y generación: evita políticas divergentes. */
+export class StructuredExecutor {
+  constructor(private readonly options: AssistantOptions) {}
+
+  async call<T>(
+    stage: Stage,
+    system: string,
+    content: string,
+    schema: z.ZodType<T>,
+    context: ExecutionContext,
+  ): Promise<T | null> {
+    const price = this.options.prices.get(this.options.providerName, this.options.model);
+    let repair = false;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      if (context.deadline <= performance.now()) throw new AppError('deadline_exceeded');
+      context.signal.throwIfAborted();
+      const request = {
+        systemPrompt: system + (repair ? `\n${this.options.prompts.repair}` : ''),
+        userContent: content,
+        responseSchema: z.toJSONSchema(schema),
+        schemaName: stage === 'generation' ? 'support_response' : 'safety_assessment',
+        maxOutputTokens:
+          stage === 'generation'
+            ? context.settings.generationMaxTokens
+            : context.settings.moderationMaxTokens,
+      };
+      const estimate = price.estimate(request);
+      // Ambos contadores se comprueban sin await: la reserva no queda a medio hacer.
+      for (const budget of context.budgets) budget.check(estimate);
+      const reservations = context.budgets.map((budget) => ({
+        budget,
+        id: budget.reserve(estimate),
+      }));
+      if (attempt === 1) context.trace.stagesAttempted++;
+      const started = performance.now();
+      const timeout = AbortSignal.timeout(
+        Math.max(
+          1,
+          Math.ceil(Math.min(context.settings.callTimeoutMs, context.deadline - started)),
+        ),
+      );
+      const signal = AbortSignal.any([context.signal, timeout]);
+      let usage: TokenUsage | null = null;
+      let outcome: T | null = null;
+      let failure: AppError | null = null;
+      let status = 'valid';
+      try {
+        signal.throwIfAborted();
+        const result = await this.options.provider.complete({ ...request, signal });
+        usage = result.usage;
+        if (context.capture) context.capture({ stage, attempt, text: result.text });
+        signal.throwIfAborted();
+        if (result.status === 'refused') {
+          status = 'refused';
+        } else {
+          if (result.status !== 'completed') throw new AppError('incomplete_output');
+          let value: unknown;
+          try {
+            value = JSON.parse(result.text);
+          } catch {
+            throw new AppError('invalid_output');
+          }
+          const parsed = schema.safeParse(value);
+          if (!parsed.success) throw new AppError('invalid_output');
+          outcome = parsed.data;
+        }
+      } catch (error) {
+        failure = signal.aborted
+          ? new AppError(context.signal.aborted ? 'deadline_exceeded' : 'timeout', { usage })
+          : error instanceof AppError
+            ? error
+            : new AppError('provider_error');
+        usage = failure.usage ?? usage;
+        status = failure.code;
+      } finally {
+        const cost = usage ? price.cost(usage) : null;
+        const knownCost = cost?.complete ? cost.usd : null;
+        for (const reservation of reservations)
+          reservation.budget.settle(reservation.id, knownCost);
+        const item: AttemptTrace = {
+          stage,
+          attempt,
+          status,
+          inputTokens: usage?.inputTokens ?? null,
+          outputTokens: usage?.outputTokens ?? null,
+          latencyMs: performance.now() - started,
+          knownCostUsd: knownCost,
+          reservedUnknownUsd: knownCost === null ? estimate : '0',
+          usageComplete: cost?.complete ?? false,
+        };
+        context.trace.attempts.push(item);
+        context.trace.usageComplete &&= item.usageComplete;
+        if (this.options.emit) {
+          await emitWithinDeadline(
+            this.options.emit,
+            {
+              event: 'llm_attempt',
+              requestId: context.trace.requestId,
+              provider: this.options.providerName,
+              model: this.options.model,
+              promptVersion: this.options.prompts.version,
+              ...item,
+            },
+            context.signal,
+          );
+        }
+      }
+      // El consumo real puede superar la reserva: detener incluso antes de publicar éxito.
+      for (const budget of context.budgets) budget.check('0');
+      if (!failure) return outcome;
+      if (
+        attempt === 2 ||
+        context.signal.aborted ||
+        (!failure.retryable && failure.code !== 'invalid_output')
+      )
+        throw failure;
+      repair = failure.code === 'invalid_output';
+      if (!repair)
+        await sleep(
+          Math.min(100 + Math.random() * 100, Math.max(0, context.deadline - performance.now())),
+          undefined,
+          { signal: context.signal },
+        );
+    }
+    throw new AppError('internal_error');
+  }
+}

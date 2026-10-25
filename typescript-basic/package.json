@@ -1,0 +1,47 @@
+{
+  "name": "nubbix-support-basic-ts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Espejo didáctico TypeScript de Nubbix Support, con Zod y CLI.",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "nubbix-support-ts": "./dist/cli.js",
+    "nubbix-support-eval": "./dist/eval-cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "predev": "node scripts/copy-prompt.mjs",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "build": "tsc && node scripts/copy-prompt.mjs",
+    "smoke:package": "npm run build && node scripts/package-smoke.mjs",
+    "check": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "format:check": "prettier --check src tests scripts",
+    "pretest": "npm run build",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.31.0",
+    "@xai-official/sdk": "0.2.5",
+    "decimal.js": "10.6.0",
+    "openai": "7.43.0",
+    "yaml": "^2.8.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "prettier": "3.9.10",
+    "tsx": "^4.20.0",
+    "typescript": "7.0.2"
+  }
+}
