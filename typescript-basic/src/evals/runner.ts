@@ -37,6 +37,7 @@ export interface EvalRunnerOptions {
   outputDir: string;
   signal?: AbortSignal;
   dataset?: EvaluationDataset;
+  checkpoint?: (report: EvaluationReport) => void | Promise<void>;
 }
 /** Selecciona versiones, partición del corpus y si se compara el efecto de la moderación. */
 export interface RunOptions {
@@ -167,6 +168,7 @@ export class EvalRunner {
           metrics: summarize(records),
         };
         await writer.reserve(report);
+        await this.options.checkpoint?.(report);
         entries.push({ report, context: { promptVersion, mode, prompts } });
       }
     }
@@ -209,6 +211,7 @@ export class EvalRunner {
         );
         row.latencyMs = performance.now() - started;
         await writer.checkpoint(entry.report);
+        await this.options.checkpoint?.(entry.report);
         if (stop) break;
       }
     }
@@ -216,6 +219,7 @@ export class EvalRunner {
       report.complete = report.records.every((row) => !row.notRun);
       report.stopReason = stop;
       await writer.finish(report);
+      await this.options.checkpoint?.(report);
     }
     return entries.map((entry) => entry.report);
   }

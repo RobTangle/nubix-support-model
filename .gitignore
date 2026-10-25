@@ -19,3 +19,6 @@ node_modules/
 .npm-cache/
 coverage/
 *.tgz
+typescript-basic/data/
+*.sqlite-wal
+*.sqlite-shm
