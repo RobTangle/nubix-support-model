@@ -4,6 +4,7 @@
  * TypeScript sólo verifican código al compilar. Centralizarlos mantiene lector y escritor de acuerdo.
  */
 import { z } from 'zod';
+import { promptVersionSchema } from '../prompt-contracts.js';
 import type { ProcessOptions, SupportRun } from '../service.js';
 import { supportResponseSchema } from '../schemas.js';
 import { categorySchema } from './data.js';
@@ -99,6 +100,7 @@ export const provenanceSchema = z.strictObject({
   manualVersion: z.string(),
   safetyVersion: z.string(),
   canaryEnabled: z.boolean(),
+  baselinePromptVersion: promptVersionSchema.optional(),
   sdkVersions: z.record(z.string(), z.string()),
 });
 // Validar al leer evita atribuir a TypeScript reportes Python o JSON adulterado/incompatible.
@@ -108,7 +110,7 @@ export const evaluationReportSchema = z
     createdAt: z.iso.datetime(),
     provider: z.string(),
     model: z.string(),
-    promptVersion: z.enum(['basic-v1', 'basic-v2']),
+    promptVersion: promptVersionSchema,
     split: z.enum(['dev', 'test']),
     suite: z.enum(['all', 'adversarial']),
     mode: z.enum(['full', 'generation_only']),

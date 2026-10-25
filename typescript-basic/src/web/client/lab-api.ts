@@ -61,6 +61,8 @@ export interface EvaluationInput {
   promptVersion: string;
   split: 'dev' | 'test';
   compareModeration: boolean;
+  promptVersions?: string[];
+  baselinePromptVersion?: string;
 }
 export interface ReviewInput {
   runId: string;

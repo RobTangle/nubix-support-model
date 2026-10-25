@@ -6,6 +6,7 @@ import { LabApi } from './lab-api.js';
 import { LabController } from './lab-controller.js';
 import { streamFrameSchema } from '../contracts.js';
 import type { LabRunDetail } from '../../lab/contracts.js';
+import { populatePromptOptions } from './prompt-options.js';
 
 interface Elements {
   form: HTMLFormElement;
@@ -84,15 +85,7 @@ class PlaygroundController {
     }
     const available = configuration.providers.find((provider) => provider.available);
     if (available) this.elements.provider.value = available.id;
-    for (const version of configuration.promptVersions) {
-      const option = this.elements.prompt.ownerDocument.createElement('option');
-      option.value = version;
-      option.textContent =
-        version === 'basic-v2'
-          ? 'basic-v2 · contexto + cuatro ejemplos'
-          : 'basic-v1 · contexto base';
-      this.elements.prompt.append(option);
-    }
+    populatePromptOptions(this.elements.prompt, configuration);
     this.elements.mode.textContent =
       configuration.mode === 'demo' ? 'DEMO · SIN CONSUMO DE API' : 'LIVE · CONSUME API';
     this.elements.mode.dataset.mode = configuration.mode;

@@ -32,6 +32,7 @@ import { readReport, ReportWriter, reviewTemplate } from '../src/evals/storage.j
 import { evaluationReportSchema } from '../src/evals/types.js';
 import type { CaseRecord, EvaluationReport } from '../src/evals/types.js';
 import { readSharedResource } from '../src/resources.js';
+import { extendedRegistry } from './fixtures/extended-registry.js';
 
 const generatedDirectories: string[] = [];
 const fixturePrefix = join(tmpdir(), 'nubbix-eval-output-');
@@ -406,6 +407,69 @@ test('comparación dev exige evidencia completa y desempata en favor de basic-v1
   second.mode = 'full';
   second.provenance.settingsHash = 'different';
   assert.throws(() => compareReports([first, second], allReviews));
+});
+
+test('comparación acepta tres prompts nuevos y baseline explícito sin consultar registro instalado', async () => {
+  const baseline = await report();
+  baseline.promptVersion = 'experiment-v8';
+  baseline.provenance.evidence = 'live';
+  baseline.provenance.baselinePromptVersion = baseline.promptVersion;
+  const candidates = ['experiment-v9', 'experiment-v10'].map((promptVersion) => ({
+    ...structuredClone(baseline),
+    runId: randomUUID(),
+    promptVersion,
+  }));
+  candidates[0]!.provenance.promptHashes.examples = hash('ejemplos distintos');
+  const reports = [...candidates, baseline];
+  const allReviews = reports.flatMap(reviews);
+  assert.ok(reports.every((value) => evaluationReportSchema.safeParse(value).success));
+  assert.equal(compareReports(reports, allReviews).recommendedPrompt, baseline.promptVersion);
+  assert.throws(() => compareReports(reports, allReviews, 'unknown-version'));
+  candidates[0]!.provenance.baselinePromptVersion = 'experiment-v9';
+  assert.throws(() => compareReports(reports, allReviews));
+});
+
+test('runner registra una tercera versión y valida IDs antes de ejecutar targets', async () => {
+  const directory = await temporaryDirectory();
+  const registry = await extendedRegistry(directory);
+  const dataset = await loadDataset();
+  const seen: string[] = [];
+  const runner = new EvalRunner({
+    provider: 'openai',
+    model: 'gpt-6-luna',
+    settings: readRuntimeSettings({}),
+    prices: await loadPrices(),
+    evidence: 'fake',
+    outputDir: join(directory, 'reports'),
+    registry,
+    dataset: {
+      ...dataset,
+      tickets: [dataset.tickets.find((row) => row.split === 'dev')!],
+      adversarial: [],
+    },
+    factory: (context) => ({
+      async process() {
+        seen.push(context.promptVersion);
+        return {
+          response: record().response!,
+          trace: trace({ promptVersion: context.promptVersion }),
+        };
+      },
+    }),
+  });
+  const reports = await runner.run({
+    promptVersions: ['basic-v1', 'experiment-v3'],
+    baselinePromptVersion: 'basic-v1',
+    split: 'dev',
+  });
+  assert.deepEqual(seen, ['basic-v1', 'experiment-v3']);
+  assert.ok(reports.every((value) => evaluationReportSchema.safeParse(value).success));
+  assert.ok(reports.every((value) => value.provenance.baselinePromptVersion === 'basic-v1'));
+  const [single] = await runner.run({ promptVersions: ['experiment-v3'], split: 'dev' });
+  assert.equal(single!.provenance.baselinePromptVersion, undefined);
+  assert.equal(compareReports([reports[0]!, single!], []).status, 'pending_human_review');
+  await assert.rejects(runner.run({ promptVersions: ['unregistered'], split: 'dev' }));
+  assert.equal(seen.length, 3);
 });
 
 test('Zod rechaza formato Python y checkpoint no permite sobrescribir corrida ajena', async () => {

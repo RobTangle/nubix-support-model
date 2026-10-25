@@ -6,8 +6,32 @@ import { JSDOM } from 'jsdom';
 import { readSupportStream } from '../src/web/client/stream-reader.js';
 import { TimelineView } from '../src/web/client/timeline-view.js';
 import { SupportApi } from '../src/web/client/api.js';
+import { populatePromptOptions } from '../src/web/client/prompt-options.js';
 
 const id = '11111111-1111-4111-8111-111111111111';
+
+test('selector de prompts: etiquetas y default provienen del registro, con contenido inerte', () => {
+  const dom = new JSDOM('<select id="prompt"></select>');
+  const select = dom.window.document.querySelector<HTMLSelectElement>('#prompt')!;
+  populatePromptOptions(select, {
+    mode: 'demo',
+    providers: [],
+    promptVersions: ['baseline', 'experiment-v3'],
+    prompts: [
+      { id: 'baseline', label: 'Base' },
+      { id: 'experiment-v3', label: '<img src=x> Experimento' },
+    ],
+    defaultPromptVersion: 'experiment-v3',
+    baselinePromptVersion: 'baseline',
+    maxConcurrent: 1,
+  });
+  assert.equal(select.value, 'experiment-v3');
+  assert.equal(select.options.length, 2);
+  assert.match(select.textContent!, /<img src=x> Experimento/);
+  assert.equal(select.querySelectorAll('img').length, 0);
+  dom.window.close();
+});
+
 const accepted = {
   type: 'accepted',
   requestId: id,

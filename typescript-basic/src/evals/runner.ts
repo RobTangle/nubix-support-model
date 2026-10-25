@@ -9,7 +9,7 @@ import { performance } from 'node:perf_hooks';
 import { Budget } from '../budget.js';
 import type { PriceCatalog } from '../budget.js';
 import { AppError } from '../errors.js';
-import { loadPrompts } from '../prompts.js';
+import { PromptRegistry } from '../prompt-registry.js';
 import type { PromptBundle, PromptVersion } from '../prompts.js';
 import type { RuntimeSettings } from '../runtime-settings.js';
 import { responseJsonSchema, safetyJsonSchema } from '../schemas.js';
@@ -38,6 +38,7 @@ export interface EvalRunnerOptions {
   signal?: AbortSignal;
   dataset?: EvaluationDataset;
   checkpoint?: (report: EvaluationReport) => void | Promise<void>;
+  registry?: PromptRegistry;
 }
 /** Selecciona versiones, partición del corpus y si se compara el efecto de la moderación. */
 export interface RunOptions {
@@ -45,6 +46,7 @@ export interface RunOptions {
   split: 'dev' | 'test';
   suite?: 'all' | 'adversarial';
   compareModeration?: boolean;
+  baselinePromptVersion?: PromptVersion;
 }
 const fatalCodes = new Set([
   'eval_budget_exceeded',
@@ -77,10 +79,14 @@ export class EvalRunner {
    * Si se detiene por presupuesto, cancelación u otro error fatal, los pendientes quedan explícitos.
    */
   async run(run: RunOptions): Promise<EvaluationReport[]> {
+    const registry = this.options.registry ?? (await PromptRegistry.load());
     if (
       !run.promptVersions.length ||
       new Set(run.promptVersions).size !== run.promptVersions.length ||
-      (run.compareModeration && run.promptVersions.length !== 1)
+      (run.compareModeration && run.promptVersions.length !== 1) ||
+      run.promptVersions.some((version) => !registry.has(version)) ||
+      (run.baselinePromptVersion !== undefined &&
+        !run.promptVersions.includes(run.baselinePromptVersion))
     )
       throw new AppError('invalid_arguments');
     const dataset = this.options.dataset ?? (await loadDataset());
@@ -104,7 +110,7 @@ export class EvalRunner {
       target?: EvaluationTarget;
     }[] = [];
     for (const promptVersion of run.promptVersions) {
-      const prompts = await loadPrompts(promptVersion, true);
+      const prompts = registry.get(promptVersion, true);
       for (const mode of run.compareModeration
         ? (['full', 'generation_only'] as const)
         : (['full'] as const)) {
@@ -128,6 +134,15 @@ export class EvalRunner {
           manualVersion: prompts.manualVersion,
           safetyVersion: prompts.safetyVersion,
           canaryEnabled: prompts.canaryEnabled,
+          ...(run.promptVersions.length > 1
+            ? {
+                baselinePromptVersion:
+                  run.baselinePromptVersion ??
+                  (run.promptVersions.includes(registry.baselineVersion)
+                    ? registry.baselineVersion
+                    : run.promptVersions[0]!),
+              }
+            : {}),
           sdkVersions: {
             openai: versions[1]!,
             xai: versions[2]!,

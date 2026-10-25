@@ -20,7 +20,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { parse, stringify } from 'yaml';
 import type { RunReport } from '../src/run-reports/types.js';
+import { extendedRegistry } from './fixtures/extended-registry.js';
 
 const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 const mock = new URL('./fixtures/mock-fetch.mjs', import.meta.url).href;
@@ -102,6 +104,63 @@ test('CLI publica sólo JSON y encuentra su YAML fuera del repositorio', () => {
     category: 'billing',
     actions: [],
   });
+});
+
+test('CLI lista versiones del registro sin tickets, claves ni reportes', () => {
+  const result = run(['--list-prompts']);
+  assert.equal(result.status, 0, result.stderr);
+  const value = JSON.parse(result.stdout);
+  assert.ok(value.versions.some((entry: { id: string }) => entry.id === value.defaultVersion));
+  assert.ok(value.versions.some((entry: { id: string }) => entry.id === value.baselineVersion));
+  assert.equal(result.stderr, '');
+  assert.equal(result.reports.length, 0);
+});
+
+test('CLI descubre versión y default nuevos desde YAML sin cambiar TypeScript', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'nubbix-registry-cli-'));
+  try {
+    cpSync(new URL('../dist/', import.meta.url), join(directory, 'dist'), { recursive: true });
+    copyFileSync(new URL('../package.json', import.meta.url), join(directory, 'package.json'));
+    symlinkSync(
+      fileURLToPath(new URL('../node_modules/', import.meta.url)),
+      join(directory, 'node_modules'),
+      'junction',
+    );
+    await extendedRegistry(join(directory, 'dist'));
+    const registry = parse(readFileSync(join(directory, 'dist/registry.yaml'), 'utf8')) as {
+      default: string;
+    };
+    registry.default = 'experiment-v3';
+    writeFileSync(join(directory, 'dist/prompt-registry.yaml'), stringify(registry));
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        mock,
+        join(directory, 'dist/cli.js'),
+        '--env-file',
+        emptyEnv,
+        '--text',
+        'Factura',
+      ],
+      {
+        cwd: tmpdir(),
+        env: { ...process.env, OPENAI_API_KEY: 'fake-test', NUBBIX_TEST_MODE: 'success' },
+        encoding: 'utf8',
+        timeout: 10000,
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).category, 'billing');
+    const summary = result.stderr
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+      .at(-1);
+    assert.equal(summary.promptVersion, 'experiment-v3');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('CLI --flow-events agrega timestamps sin mezclar contenido con la telemetría', () => {

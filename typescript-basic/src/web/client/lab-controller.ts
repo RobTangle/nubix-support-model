@@ -2,6 +2,7 @@ import type { LabRunDetail } from '../../lab/contracts.js';
 import type { WebConfiguration } from './api.js';
 import { LabApi, type EvaluationInput } from './lab-api.js';
 import { EvaluationView } from './evaluation-view.js';
+import { populatePromptOptions } from './prompt-options.js';
 
 /** Historial y trabajos persistentes: abortar una lectura nunca cancela el trabajo del servidor. */
 export class LabController {
@@ -42,6 +43,17 @@ export class LabController {
       provider.append(option);
     }
     provider.value = configuration.providers.find((item) => item.available)?.id ?? '';
+    populatePromptOptions(this.element<HTMLSelectElement>('#evaluation-prompt'), configuration);
+    populatePromptOptions(this.element<HTMLSelectElement>('#evaluation-versions'), configuration);
+    populatePromptOptions(
+      this.element<HTMLSelectElement>('#evaluation-baseline'),
+      configuration,
+      configuration.baselinePromptVersion ?? configuration.promptVersions[0],
+    );
+    this.element('#evaluation-operation').addEventListener('change', () =>
+      this.configureEvaluationOptions(),
+    );
+    this.configureEvaluationOptions();
     this.element<HTMLButtonElement>('#evaluation-start').disabled = !provider.value;
     this.element('#evaluation-mode').textContent =
       configuration.mode === 'live'
@@ -144,6 +156,21 @@ export class LabController {
       split: this.element<HTMLSelectElement>('#evaluation-split').value as EvaluationInput['split'],
       compareModeration: this.element<HTMLInputElement>('#evaluation-moderation').checked,
     };
+    if (input.operation === 'compare') {
+      input.promptVersions = [
+        ...this.element<HTMLSelectElement>('#evaluation-versions').selectedOptions,
+      ].map((option) => option.value);
+      input.baselinePromptVersion = this.element<HTMLSelectElement>('#evaluation-baseline').value;
+      if (
+        input.promptVersions.length < 2 ||
+        !input.promptVersions.includes(input.baselinePromptVersion)
+      ) {
+        this.element('#evaluation-status').textContent =
+          'Elegí al menos dos versiones e incluí el prompt de referencia.';
+        button.disabled = false;
+        return;
+      }
+    }
     try {
       const id = await this.api.start(input);
       this.watch(id);
@@ -153,6 +180,23 @@ export class LabController {
         error instanceof Error ? error.message : 'No se pudo iniciar el trabajo.';
       button.disabled = false;
     }
+  }
+
+  private configureEvaluationOptions(): void {
+    const operation = this.element<HTMLSelectElement>('#evaluation-operation').value;
+    const compare = operation === 'compare';
+    this.element('#evaluation-single-prompt').hidden = compare;
+    this.element<HTMLSelectElement>('#evaluation-prompt').disabled = compare;
+    this.element('#evaluation-versions-label').hidden = !compare;
+    this.element('#evaluation-baseline-label').hidden = !compare;
+    this.element<HTMLSelectElement>('#evaluation-versions').disabled = !compare;
+    this.element<HTMLSelectElement>('#evaluation-baseline').disabled = !compare;
+    const split = this.element<HTMLSelectElement>('#evaluation-split');
+    if (compare) split.value = 'dev';
+    split.disabled = compare;
+    const moderation = this.element<HTMLInputElement>('#evaluation-moderation');
+    moderation.disabled = operation !== 'adversarial';
+    if (moderation.disabled) moderation.checked = false;
   }
 
   private watch(id: string): void {

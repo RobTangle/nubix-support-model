@@ -209,16 +209,28 @@ Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar l
             <label
               >Operación<select id="evaluation-operation">
                 <option value="run">Evaluar un prompt</option>
-                <option value="compare">Comparar basic-v1 y basic-v2</option>
+                <option value="compare">Comparar versiones de prompt</option>
                 <option value="adversarial">Suite adversarial</option>
               </select></label
             >
-            <label
-              >Prompt<select id="evaluation-prompt">
-                <option value="basic-v1">basic-v1</option>
-                <option value="basic-v2">basic-v2</option>
-              </select></label
+            <label id="evaluation-single-prompt"
+              >Prompt<select id="evaluation-prompt"></select
+            ></label>
+            <label id="evaluation-versions-label" hidden
+              >Versiones a comparar<select
+                id="evaluation-versions"
+                multiple
+                size="4"
+                aria-describedby="evaluation-versions-help"
+              ></select
+              ><span id="evaluation-versions-help" class="field-help"
+                >Elegí al menos dos versiones e incluí la referencia. Ctrl/Cmd permite elegir
+                varias.</span
+              ></label
             >
+            <label id="evaluation-baseline-label" hidden
+              >Prompt de referencia (baseline)<select id="evaluation-baseline"></select
+            ></label>
             <label
               >Partición<select id="evaluation-split">
                 <option value="dev">dev · desarrollo y selección</option>

@@ -177,7 +177,7 @@ export function assessReport(report: EvaluationReport, reviews: HumanReview[]) {
 }
 
 /**
- * Define qué debe mantenerse igual al comparar basic-v1 con basic-v2: modelo, corpus, manual,
+ * Define qué debe mantenerse igual al comparar prompts: modelo, corpus, manual,
  * moderación, contratos, precios y configuración. Así evitamos atribuir al prompt un cambio
  * causado por otra condición. Se excluyen promptVersion y el hash de system deliberadamente:
  * la generación es la variable que cambia en esta comparación; las demás huellas deben coincidir.
@@ -204,31 +204,54 @@ function comparisonContext(report: EvaluationReport): string {
     context.promptHashes.inputModeration,
     context.promptHashes.outputModeration,
     context.promptHashes.repair,
-    context.promptHashes.examples,
   ]);
 }
 
 /**
- * Compara v1/v2 en desarrollo bajo las mismas condiciones y recomienda entre las elegibles:
- * primero macro F1, luego costo y latencia; ante empate conserva v1. Aún exige validar en test.
+ * Compara versiones en desarrollo bajo las mismas condiciones y recomienda entre las elegibles:
+ * primero macro F1, luego costo y latencia; ante empate conserva el baseline. Aún exige test.
  * Recomendamos con desarrollo; nunca mutamos configuración ni promovemos un mock.
  */
-export function compareReports(reports: EvaluationReport[], inputReviews: unknown[]) {
+export function compareReports(
+  reports: EvaluationReport[],
+  inputReviews: unknown[],
+  baselinePromptVersion?: string,
+) {
   const reviews = validateReviews(reports, inputReviews);
   if (
-    reports.length !== 2 ||
-    new Set(reports.map((report) => report.runId)).size !== 2 ||
-    new Set(reports.map((report) => report.promptVersion)).size !== 2 ||
+    reports.length < 2 ||
+    new Set(reports.map((report) => report.runId)).size !== reports.length ||
+    new Set(reports.map((report) => report.promptVersion)).size !== reports.length ||
     reports.some(
       (report) => report.split !== 'dev' || report.mode !== 'full' || report.suite !== 'all',
     ) ||
     new Set(reports.map(comparisonContext)).size !== 1
   )
     throw new AppError('invalid_report');
+  const declared = [
+    ...new Set(
+      reports.flatMap((report) =>
+        report.provenance.baselinePromptVersion ? [report.provenance.baselinePromptVersion] : [],
+      ),
+    ),
+  ];
+  // Los reportes viejos no declaraban baseline: un orden estable conserva su lectura offline,
+  // incluso si sus versiones ya se retiraron del registro actual de la aplicación.
+  const baselineVersion =
+    baselinePromptVersion ??
+    declared[0] ??
+    reports.map((report) => report.promptVersion).sort()[0]!;
+  if (
+    declared.length > 1 ||
+    (declared[0] && declared[0] !== baselineVersion) ||
+    !reports.some((report) => report.promptVersion === baselineVersion)
+  )
+    throw new AppError('invalid_report');
   const assessments = reports.map((report) => assessReport(report, reviews));
   if (assessments.some((assessment) => assessment.pendingReviews))
     return { recommendedPrompt: null, status: 'pending_human_review', assessments };
-  const baseline = assessments[reports.findIndex((report) => report.promptVersion === 'basic-v1')]!;
+  const baseline =
+    assessments[reports.findIndex((report) => report.promptVersion === baselineVersion)]!;
   const eligible = reports.filter((_report, index) => {
     const assessment = assessments[index]!;
     return (
@@ -245,7 +268,11 @@ export function compareReports(reports: EvaluationReport[], inputReviews: unknow
       b.macroF1 - a.macroF1 ||
       new Decimal(a.estimatedCommittedUsd).comparedTo(b.estimatedCommittedUsd) ||
       a.latencyP95Ms - b.latencyP95Ms ||
-      (left.promptVersion === 'basic-v1' ? -1 : 1)
+      (left.promptVersion === baselineVersion
+        ? -1
+        : right.promptVersion === baselineVersion
+          ? 1
+          : left.promptVersion.localeCompare(right.promptVersion))
     );
   });
   return {

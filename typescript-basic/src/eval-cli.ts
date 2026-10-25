@@ -13,14 +13,16 @@ import { summarize } from './evals/metrics.js';
 
 const help = `Evaluaciones sintéticas TypeScript (las llamadas live consumen presupuesto).
 Uso:
-  nubbix-support-eval run --provider openai|xai|google-ai --prompt-version basic-v1|basic-v2 --split dev|test
-  nubbix-support-eval compare --provider openai|xai|google-ai [--split dev]
+  nubbix-support-eval run --provider openai|xai|google-ai [--prompt-version ID] --split dev|test
+  nubbix-support-eval compare --provider openai|xai|google-ai [--prompt-versions ID --prompt-versions ID] [--baseline-prompt ID] [--split dev]
   nubbix-support-eval compare --reports v1.json v2.json --reviews-dir reviews
-  nubbix-support-eval adversarial --provider openai|xai|google-ai --prompt-version basic-v1|basic-v2 [--compare-moderation]
+  nubbix-support-eval adversarial --provider openai|xai|google-ai [--prompt-version ID] [--compare-moderation]
   nubbix-support-eval summarize --report run.json [--reviews human.jsonl]
 Opciones: --output-dir reports, --env-file archivo, --help.
 Cada corrida produce JSON validado, resumen Markdown y revisión JSONL pendiente.
 Comparar reportes y resumir son operaciones offline sin credenciales ni clientes SDK.
+Las versiones y el baseline predeterminados se obtienen del registro YAML.
+--list-prompts muestra el registro como JSON sin consumir API.
 `;
 
 /**
@@ -38,6 +40,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       options: {
         provider: { type: 'string' },
         'prompt-version': { type: 'string' },
+        'prompt-versions': { type: 'string', multiple: true },
+        'baseline-prompt': { type: 'string' },
         split: { type: 'string' },
         reports: { type: 'string', multiple: true },
         report: { type: 'string' },
@@ -47,6 +51,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         'output-dir': { type: 'string' },
         'env-file': { type: 'string' },
         help: { type: 'boolean' },
+        'list-prompts': { type: 'boolean' },
       },
     });
   } catch {
@@ -57,6 +62,24 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     process.stdout.write(help);
     return;
   }
+  if (values['list-prompts']) {
+    if (positionals.length || Object.keys(values).some((name) => name !== 'list-prompts'))
+      throw new AppError('invalid_arguments');
+    const { PromptRegistry } = await import('./prompt-registry.js');
+    const registry = await PromptRegistry.load();
+    process.stdout.write(
+      JSON.stringify(
+        {
+          defaultVersion: registry.defaultVersion,
+          baselineVersion: registry.baselineVersion,
+          versions: registry.versions,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    return;
+  }
   const command = positionals[0];
   if (!command || !['run', 'compare', 'adversarial', 'summarize'].includes(command))
     throw new AppError('invalid_arguments');
@@ -65,6 +88,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     offline &&
     (values.provider ||
       values['prompt-version'] ||
+      values['prompt-versions'] ||
       values.split ||
       values['compare-moderation'] ||
       values['env-file'] ||
@@ -76,7 +100,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       !values.report ||
       values.reports ||
       positionals.length !== 1 ||
-      (values.reviews && values['reviews-dir'])
+      (values.reviews && values['reviews-dir']) ||
+      values['baseline-prompt']
     )
       throw new AppError('invalid_arguments');
     const report = await readReport(values.report);
@@ -95,7 +120,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     const paths = [...values.reports.flatMap((path) => path.split(',')), ...positionals.slice(1)];
     const reports = await Promise.all(paths.map(readReport));
     const reviews = await loadReviewDirectory(values['reviews-dir'], reports);
-    process.stdout.write(JSON.stringify(compareReports(reports, reviews), null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify(compareReports(reports, reviews, values['baseline-prompt']), null, 2) + '\n',
+    );
     return;
   }
   if (
@@ -104,17 +131,34 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     values['reviews-dir'] ||
     positionals.length !== 1 ||
     (values['compare-moderation'] && command !== 'adversarial') ||
-    (command === 'compare' && values['prompt-version'])
+    (command === 'compare' && values['prompt-version']) ||
+    (command !== 'compare' && (values['prompt-versions'] || values['baseline-prompt']))
   )
     throw new AppError('invalid_arguments');
   const provider = values.provider ?? 'openai';
-  const promptVersion = values['prompt-version'] ?? 'basic-v1';
   const split = values.split ?? 'dev';
   if (
     !['openai', 'xai', 'google-ai'].includes(provider) ||
-    !['basic-v1', 'basic-v2'].includes(promptVersion) ||
     !['dev', 'test'].includes(split) ||
     (command === 'compare' && split !== 'dev')
+  )
+    throw new AppError('invalid_arguments');
+  const { PromptRegistry } = await import('./prompt-registry.js');
+  const registry = await PromptRegistry.load();
+  const promptVersion = values['prompt-version'] ?? registry.defaultVersion;
+  const promptVersions =
+    command === 'compare'
+      ? (values['prompt-versions']?.flatMap((value) => value.split(',')) ??
+        registry.versions.map((entry) => entry.id))
+      : [promptVersion];
+  const baselinePromptVersion =
+    command === 'compare' ? (values['baseline-prompt'] ?? registry.baselineVersion) : promptVersion;
+  if (
+    !promptVersions.length ||
+    new Set(promptVersions).size !== promptVersions.length ||
+    promptVersions.some((version) => !registry.has(version)) ||
+    (command === 'compare' &&
+      (promptVersions.length < 2 || !promptVersions.includes(baselinePromptVersion)))
   )
     throw new AppError('invalid_arguments');
   // El borde live se importa después de decidir modo: offline jamás construye clientes SDK.
@@ -152,6 +196,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       evidence: 'live',
       outputDir: values['output-dir'] ?? 'reports',
       signal: controller.signal,
+      registry,
       factory: ({ mode, prompts }) => {
         const options = {
           provider: adapter,
@@ -170,10 +215,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       },
     });
     const reports = await runner.run({
-      promptVersions:
-        command === 'compare'
-          ? ['basic-v1', 'basic-v2']
-          : [promptVersion as 'basic-v1' | 'basic-v2'],
+      promptVersions,
+      ...(command === 'compare' ? { baselinePromptVersion } : {}),
       split: split as 'dev' | 'test',
       suite: command === 'adversarial' ? 'adversarial' : 'all',
       compareModeration: values['compare-moderation'] ?? false,

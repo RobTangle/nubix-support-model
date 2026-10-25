@@ -7,6 +7,8 @@ import type { EvaluationDataset } from '../evals/data.js';
 import type { EvaluationTarget } from '../evals/types.js';
 import { assessReport, compareReports, humanReviewSchema } from '../evals/reviews.js';
 import type { RuntimeSettings } from '../runtime-settings.js';
+import { promptVersionSchema } from '../prompt-contracts.js';
+import type { PromptRegistry } from '../prompt-registry.js';
 import type { WebProvider } from '../web/contracts.js';
 import { LabStore } from './storage.js';
 
@@ -14,15 +16,23 @@ export const evaluationInputSchema = z
   .strictObject({
     provider: z.enum(['openai', 'xai', 'google-ai']),
     operation: z.enum(['run', 'compare', 'adversarial']),
-    promptVersion: z.enum(['basic-v1', 'basic-v2']),
+    promptVersion: promptVersionSchema,
+    promptVersions: z.array(promptVersionSchema).min(2).max(100).optional(),
+    baselinePromptVersion: promptVersionSchema.optional(),
     split: z.enum(['dev', 'test']),
     compareModeration: z.boolean(),
   })
   .refine(
     (input) =>
       (input.operation !== 'compare' || input.split === 'dev') &&
-      (!input.compareModeration || input.operation === 'adversarial'),
+      (!input.compareModeration || input.operation === 'adversarial') &&
+      (input.operation === 'compare' ||
+        (input.promptVersions === undefined && input.baselinePromptVersion === undefined)),
   );
+type EvaluationInput = z.infer<typeof evaluationInputSchema> & {
+  promptVersions: string[];
+  baselinePromptVersion: string;
+};
 
 interface EvaluationServiceOptions {
   store: LabStore;
@@ -32,6 +42,7 @@ interface EvaluationServiceOptions {
   prices: PriceCatalog;
   outputDir: string;
   dataset?: EvaluationDataset;
+  registry: PromptRegistry;
   factory(
     provider: WebProvider,
     context: TargetContext,
@@ -48,7 +59,27 @@ export class LabEvaluationService {
     const parsed = evaluationInputSchema.safeParse(value);
     if (!parsed.success) throw new AppError('invalid_arguments');
     if (this.active.size) throw new AppError('rate_limit');
-    const input = parsed.data;
+    const selected = parsed.data;
+    const versions =
+      selected.operation === 'compare'
+        ? (selected.promptVersions ?? this.options.registry.versions.map((entry) => entry.id))
+        : [selected.promptVersion];
+    const baseline =
+      selected.operation === 'compare'
+        ? (selected.baselinePromptVersion ?? this.options.registry.baselineVersion)
+        : selected.promptVersion;
+    if (
+      !this.options.registry.has(selected.promptVersion) ||
+      versions.some((version) => !this.options.registry.has(version)) ||
+      new Set(versions).size !== versions.length ||
+      (selected.operation === 'compare' && (versions.length < 2 || !versions.includes(baseline)))
+    )
+      throw new AppError('invalid_arguments');
+    const input: EvaluationInput = {
+      ...selected,
+      promptVersions: versions,
+      baselinePromptVersion: baseline,
+    };
     const model = this.options.models.get(input.provider);
     if (!model) throw new AppError('missing_key');
     this.options.prices.get(input.provider, model);
@@ -59,8 +90,8 @@ export class LabEvaluationService {
       mode: this.options.mode,
       provider: input.provider,
       model,
-      promptVersion: input.operation === 'compare' ? 'basic-v1,basic-v2' : input.promptVersion,
-      input,
+      promptVersion: input.operation === 'compare' ? 'comparison' : input.promptVersion,
+      input: input.operation === 'compare' ? input : selected,
     });
     const controller = new AbortController();
     // Posponer al microtask permite registrar el job antes de que el runner haga trabajo asíncrono.
@@ -80,15 +111,21 @@ export class LabEvaluationService {
     if (!job || job.kind !== 'evaluation') return null;
     const reports = this.options.store.getReports(jobId);
     const reviews = reports.flatMap((report) => this.options.store.getReviews(report.runId));
+    // Los jobs anteriores pueden nombrar versiones retiradas. Leer historia no consulta el
+    // registro actual ni reconstruye targets: utiliza la selección que quedó persistida.
     const input = evaluationInputSchema.parse(job.input);
+    const variants =
+      input.operation === 'compare'
+        ? (input.promptVersions ?? job.promptVersion.split(','))
+        : [input.promptVersion];
     const total = reports.length
       ? reports.reduce((sum, report) => sum + report.records.length, 0)
       : (input.operation === 'adversarial' ? 20 : 60) *
-        (input.operation === 'compare' || input.compareModeration ? 2 : 1);
+        (input.operation === 'compare' ? variants.length : input.compareModeration ? 2 : 1);
     const assessments = reports.map((report) => assessReport(report, reviews));
     const selection =
-      input.operation === 'compare' && reports.length === 2
-        ? compareReports(reports, reviews)
+      input.operation === 'compare' && reports.length >= 2 && reports.length === variants.length
+        ? compareReports(reports, reviews, input.baselinePromptVersion)
         : { recommendedPrompt: null, status: 'not_applicable' };
     return {
       job,
@@ -139,7 +176,7 @@ export class LabEvaluationService {
   private async execute(
     jobId: string,
     model: string,
-    input: z.infer<typeof evaluationInputSchema>,
+    input: EvaluationInput,
     signal: AbortSignal,
   ): Promise<void> {
     try {
@@ -151,6 +188,7 @@ export class LabEvaluationService {
         evidence: this.options.mode === 'live' ? 'live' : 'fake',
         outputDir: this.options.outputDir,
         signal,
+        registry: this.options.registry,
         ...(this.options.dataset ? { dataset: this.options.dataset } : {}),
         checkpoint: (report) => this.options.store.saveReport(jobId, report),
         factory: async (context) => {
@@ -175,6 +213,7 @@ export class LabEvaluationService {
                   observe: (event) => this.options.store.appendEvent(id, event),
                   inspect: (entry) => this.options.store.appendInspection(id, entry),
                 });
+                if (signal.aborted) throw new AppError('cancelled', { trace: result.trace });
                 this.options.store.finishRun(id, { status: 'completed', result });
                 return result;
               } catch (error) {
@@ -191,8 +230,10 @@ export class LabEvaluationService {
         },
       });
       const reports = await runner.run({
-        promptVersions:
-          input.operation === 'compare' ? ['basic-v1', 'basic-v2'] : [input.promptVersion],
+        promptVersions: input.promptVersions,
+        ...(input.operation === 'compare'
+          ? { baselinePromptVersion: input.baselinePromptVersion }
+          : {}),
         split: input.split,
         suite: input.operation === 'adversarial' ? 'adversarial' : 'all',
         compareModeration: input.compareModeration,

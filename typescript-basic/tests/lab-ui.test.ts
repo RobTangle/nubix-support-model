@@ -27,6 +27,60 @@ const run = {
   inspections: [],
 };
 
+test('registro UI: descubre variantes nuevas y envía selección de comparación con baseline explícito', async () => {
+  const html = await readFile(new URL('../src/web/public/index.html', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/' });
+  let submitted: unknown;
+  const api = new LabApi(async (input, init) => {
+    if (init?.method === 'POST') {
+      submitted = JSON.parse(String(init.body));
+      return Response.json({ error: 'fixture' }, { status: 400 });
+    }
+    return Response.json({ items: [], total: 0 });
+  });
+  const controller = new LabController(dom.window.document, api, () => {});
+  controller.initialize({
+    mode: 'demo',
+    providers: [{ id: 'openai', label: 'OpenAI', model: 'fixture', available: true }],
+    promptVersions: ['basic-v1', 'basic-v2', 'experiment-v3'],
+    prompts: [
+      { id: 'basic-v1', label: 'Baseline' },
+      { id: 'basic-v2', label: 'Ejemplos' },
+      { id: 'experiment-v3', label: 'Nuevo experimento' },
+    ],
+    defaultPromptVersion: 'experiment-v3',
+    baselinePromptVersion: 'basic-v1',
+    maxConcurrent: 1,
+  } as never);
+  const document = dom.window.document;
+  assert.equal(
+    document.querySelector<HTMLSelectElement>('#evaluation-prompt')!.value,
+    'experiment-v3',
+  );
+  assert.match(document.querySelector('#evaluation-prompt')!.textContent!, /Nuevo experimento/);
+  const operation = document.querySelector<HTMLSelectElement>('#evaluation-operation')!;
+  operation.value = 'compare';
+  operation.dispatchEvent(new dom.window.Event('change'));
+  const versions = document.querySelector<HTMLSelectElement>('#evaluation-versions')!;
+  for (const option of versions.options) option.selected = option.value !== 'basic-v2';
+  document.querySelector<HTMLSelectElement>('#evaluation-baseline')!.value = 'basic-v1';
+  document
+    .querySelector<HTMLFormElement>('#evaluation-form')!
+    .dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+  await delay(5);
+  assert.deepEqual(submitted, {
+    provider: 'openai',
+    operation: 'compare',
+    promptVersion: 'experiment-v3',
+    split: 'dev',
+    compareModeration: false,
+    promptVersions: ['basic-v1', 'experiment-v3'],
+    baselinePromptVersion: 'basic-v1',
+  });
+  dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+  dom.window.close();
+});
+
 test('laboratorio: consultar historial y reabrir evaluación sólo envía GET, sin consumir API', async () => {
   const requests: string[] = [];
   const api = new LabApi(async (input, init) => {

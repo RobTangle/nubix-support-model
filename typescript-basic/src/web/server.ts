@@ -8,7 +8,8 @@ import { readEnvironment, readSettings } from '../config.js';
 import { AppError, publicError } from '../errors.js';
 import { createEventSink } from '../event-sink.js';
 import type { FlowEvent } from '../observability/events.js';
-import { loadPrompts, type PromptVersion } from '../prompts.js';
+import type { PromptVersion } from '../prompts.js';
+import { PromptRegistry } from '../prompt-registry.js';
 import { createProvider } from '../providers.js';
 import { readRuntimeSettings } from '../runtime-settings.js';
 import { SupportAssistant } from '../service.js';
@@ -66,10 +67,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const live = !values.demo;
   const environment = live ? await readEnvironment(values['env-file']) : {};
   const prices = await loadPrices();
-  const prompts = {
-    'basic-v1': await loadPrompts('basic-v1'),
-    'basic-v2': await loadPrompts('basic-v2'),
-  };
+  const registry = await PromptRegistry.load();
   const settings = readRuntimeSettings(environment);
   const clients = new Map<WebProvider, ReturnType<typeof createProvider>>();
   const models = new Map<WebProvider, string>();
@@ -84,7 +82,10 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       models.set(provider, model);
       return { id: provider, label: labels[provider], model, available };
     }),
-    promptVersions: ['basic-v1', 'basic-v2'],
+    promptVersions: registry.versions.map((entry) => entry.id),
+    prompts: [...registry.versions],
+    defaultPromptVersion: registry.defaultVersion,
+    baselinePromptVersion: registry.baselineVersion,
     maxConcurrent: 4,
   };
   if (live && !configuration.providers.some((provider) => provider.available))
@@ -95,6 +96,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const store = new LabStore(databasePath);
   const sink = await createEventSink<TelemetryEvent | FlowEvent>(values['telemetry-file']);
   const evaluations = new LabEvaluationService({
+    registry,
     store,
     mode: configuration.mode,
     models: new Map(
@@ -134,7 +136,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         provider: client,
         providerName: provider,
         model: models.get(provider)!,
-        prompts: prompts[version],
+        prompts: registry.get(version),
         prices,
         settings,
         emit: sink.emit,

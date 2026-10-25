@@ -23,6 +23,52 @@ const response = {
   actions: [],
 };
 
+test('HTTP registro: admite una versión nueva configurada y rechaza IDs ausentes antes del asistente', async () => {
+  const calls: string[] = [];
+  const { server, url } = await launch(
+    (_provider, version) => {
+      calls.push(version);
+      return {
+        async process() {
+          throw new AppError('provider_error');
+        },
+      };
+    },
+    {
+      configuration: {
+        ...configuration,
+        promptVersions: ['basic-v1', 'experiment-v3'],
+        prompts: [
+          { id: 'basic-v1', label: 'Base' },
+          { id: 'experiment-v3', label: 'Experimento' },
+        ],
+        defaultPromptVersion: 'experiment-v3',
+        baselinePromptVersion: 'basic-v1',
+      } as never,
+    },
+  );
+  try {
+    const config = await (await fetch(`${url}/api/config`)).json();
+    assert.equal(config.defaultPromptVersion, 'experiment-v3');
+    for (const [version, status] of [
+      ['experiment-v3', 200],
+      ['unknown-v9', 400],
+    ] as const) {
+      const result = await fetch(`${url}/api/support/stream`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Factura', provider: 'openai', promptVersion: version }),
+      });
+      assert.equal(result.status, status);
+      await result.text();
+    }
+    assert.deepEqual(calls, ['experiment-v3']);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
 async function launch(
   createAssistant: Parameters<typeof createApp>[0]['createAssistant'],
   extra: Partial<WebApplicationOptions> = {},

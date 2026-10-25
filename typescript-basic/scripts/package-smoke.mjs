@@ -39,6 +39,7 @@ try {
       .stdout,
   )[0];
   for (const resource of [
+    'dist/prompt-registry.yaml',
     'dist/resources/shared/prices.yaml',
     'dist/resources/shared/datasets/tickets.jsonl',
     'dist/resources/shared/datasets/adversarial.jsonl',
@@ -101,37 +102,51 @@ try {
   // Una factory falsa prueba el paquete instalado y su procedencia sin atribuir calidad al modelo.
   const fixture = String.raw`
     import assert from 'node:assert/strict';
-    const {SupportAssistant,loadPrompts,loadPrices,readRuntimeSettings}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'index.js')).href)});
+    const {SupportAssistant,loadPrompts,loadPrices,readRuntimeSettings,PromptRegistry}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'index.js')).href)});
+    const {readFile,writeFile}=await import('node:fs/promises');
+    const {createRequire}=await import('node:module');
+    const {parse,stringify}=createRequire(${JSON.stringify(join(installed, 'package.json'))})('yaml');
+    const registryPath=${JSON.stringify(join(installed, 'dist', 'prompt-registry.yaml'))};
+    const manifest=parse(await readFile(registryPath,'utf8'));
+    manifest.prompts.push({id:'smoke-v3',label:'Variante de empaquetado',system:'resources/smoke-v3.yaml'});
+    await writeFile(${JSON.stringify(join(installed, 'dist', 'resources', 'smoke-v3.yaml'))},stringify({version:'smoke-v3',system:'Clasificá la consulta y respetá el manual. {{manual}}'}));
+    await writeFile(registryPath,stringify(manifest));
+    const {pathToFileURL}=await import('node:url');
+    const registry=await PromptRegistry.load(pathToFileURL(registryPath));
+    assert.ok(registry.has('smoke-v3'));
     const {EvalRunner}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'evals', 'runner.js')).href)});
     const prices=await loadPrices();
     const settings=readRuntimeSettings({});
     assert.match((await loadPrompts('basic-v2')).system,/EJEMPLOS INDEPENDIENTES/);
     const provider={async complete(request){return {status:'completed',usage:{inputTokens:20,outputTokens:10,cachedInputTokens:0,cacheWriteInputTokens:0},text:JSON.stringify(request.schemaName==='safety_assessment'?{decision:'allow'}:{answer:'Propuesta sintética',confidence:0.8,category:'other',actions:[]})};}};
-    const runner=new EvalRunner({provider:'google-ai',model:'gemini-3.5-flash-lite',settings,prices,evidence:'fake',outputDir:${JSON.stringify(join(temporary, 'reports'))},factory:({prompts})=>new SupportAssistant({provider,providerName:'google-ai',model:'gemini-3.5-flash-lite',settings,prices,prompts})});
-    const [report]=await runner.run({promptVersions:['basic-v1'],split:'dev',suite:'adversarial'});
+    const runner=new EvalRunner({registry,provider:'google-ai',model:'gemini-3.5-flash-lite',settings,prices,evidence:'fake',outputDir:${JSON.stringify(join(temporary, 'reports'))},factory:({prompts})=>new SupportAssistant({provider,providerName:'google-ai',model:'gemini-3.5-flash-lite',settings,prices,prompts})});
+    const [report]=await runner.run({promptVersions:['smoke-v3'],split:'dev',suite:'adversarial'});
     assert.equal(report.complete,true);
     assert.equal(report.records.length,20);
     assert.equal(report.provenance.evidence,'fake');
     assert.ok(report.provenance.sdkVersions.xai);
     assert.ok(report.provenance.sdkVersions['google-ai']);
     assert.equal(report.provider,'google-ai');
+    assert.equal(report.promptVersion,'smoke-v3');
     const {createApp}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'web', 'app.js')).href)});
     const {DemoProvider}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'web', 'demo-provider.js')).href)});
     const {LabStore}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'lab', 'storage.js')).href)});
     const store=new LabStore(${JSON.stringify(join(temporary, 'smoke.sqlite'))});
-    const prompts=await loadPrompts();
-    const app=createApp({store,configuration:{mode:'demo',providers:[{id:'google-ai',label:'Google AI',model:'gemini-3.5-flash-lite',available:true}],promptVersions:['basic-v1','basic-v2'],maxConcurrent:2},createAssistant:()=>new SupportAssistant({provider:new DemoProvider(),providerName:'google-ai',model:'gemini-3.5-flash-lite',prompts,prices,settings})});
+    const app=createApp({store,configuration:{mode:'demo',providers:[{id:'google-ai',label:'Google AI',model:'gemini-3.5-flash-lite',available:true}],promptVersions:registry.versions.map(entry=>entry.id),prompts:[...registry.versions],defaultPromptVersion:registry.defaultVersion,baselinePromptVersion:registry.baselineVersion,maxConcurrent:2},createAssistant:(_provider,version)=>new SupportAssistant({provider:new DemoProvider(),providerName:'google-ai',model:'gemini-3.5-flash-lite',prompts:registry.get(version),prices,settings})});
     const server=app.listen(0,'127.0.0.1');
     await new Promise(resolve=>server.once('listening',resolve));
     try {
       const origin='http://127.0.0.1:'+server.address().port;
       assert.equal((await fetch(origin+'/')).status,200);
       assert.equal((await fetch(origin+'/app.js')).status,200);
-      const stream=await fetch(origin+'/api/support/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'Necesito una factura',provider:'google-ai',promptVersion:'basic-v1'})});
+      const config=await (await fetch(origin+'/api/config')).json();
+      assert.ok(config.promptVersions.includes('smoke-v3'));
+      const stream=await fetch(origin+'/api/support/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'Necesito una factura',provider:'google-ai',promptVersion:'smoke-v3'})});
       const frames=(await stream.text()).trim().split('\n').map(line=>JSON.parse(line));
       assert.equal(frames[0].type,'accepted');
       assert.equal(frames.at(-1).type,'result');
       assert.equal(frames.at(-1).mode,'demo');
+      assert.equal(frames.at(-1).trace.promptVersion,'smoke-v3');
       assert.equal(frames.filter(frame=>frame.type==='event'&&frame.event.event==='llm.request.started').length,3);
       assert.equal(frames.filter(frame=>frame.type==='inspection'&&frame.inspection.kind==='llm.response').length,3);
       const history=await (await fetch(origin+'/api/history')).json();

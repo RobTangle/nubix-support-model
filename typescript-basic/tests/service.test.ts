@@ -36,11 +36,14 @@ function assistant(provider: LLMProvider, deadlineMs = 60_000) {
   });
 }
 
-test('basic-v1 conserva el contexto Python y v2 sólo agrega ejemplos independientes', async () => {
-  const python = parse(
-    await readFile(new URL('../../src/nubbix_support_basic/prompt.yaml', import.meta.url), 'utf8'),
-  ) as { system: string };
-  assert.equal(await loadPrompt(), python.system);
+test('default conserva instrucciones locales y v2 sólo agrega ejemplos independientes', async () => {
+  const base = parse(await readFile(new URL('../src/prompt.yaml', import.meta.url), 'utf8')) as {
+    system: string;
+  };
+  const context = parse(
+    await readFile(new URL('../src/resources/context.yaml', import.meta.url), 'utf8'),
+  ) as { manual: string };
+  assert.equal(await loadPrompt(), base.system.replaceAll('{{manual}}', context.manual.trimEnd()));
   const v2 = await loadPrompts('basic-v2');
   assert.ok(v2.system.startsWith(prompts.system));
   assert.equal(v2.hashes.manual, prompts.hashes.manual);

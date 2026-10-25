@@ -2,22 +2,42 @@ import { z } from 'zod';
 import { flowEventSchema } from '../observability/events.js';
 import { supportResponseSchema, ticketSchema } from '../schemas.js';
 import { inspectionEntrySchema } from '../inspection/contracts.js';
+import { promptMetadataSchema, promptVersionSchema } from '../prompt-contracts.js';
 
 export const webProviderSchema = z.enum(['openai', 'xai', 'google-ai']);
-export const webPromptSchema = z.enum(['basic-v1', 'basic-v2']);
-export const webConfigurationSchema = z.strictObject({
-  mode: z.enum(['demo', 'live']),
-  providers: z.array(
-    z.strictObject({
-      id: webProviderSchema,
-      label: z.string(),
-      model: z.string(),
-      available: z.boolean(),
-    }),
-  ),
-  promptVersions: z.array(webPromptSchema),
-  maxConcurrent: z.number().int().positive().max(16),
-});
+export const webPromptSchema = promptVersionSchema;
+export const webConfigurationSchema = z
+  .strictObject({
+    mode: z.enum(['demo', 'live']),
+    providers: z.array(
+      z.strictObject({
+        id: webProviderSchema,
+        label: z.string(),
+        model: z.string(),
+        available: z.boolean(),
+      }),
+    ),
+    promptVersions: z.array(webPromptSchema).min(1).max(100),
+    prompts: z.array(promptMetadataSchema).optional(),
+    defaultPromptVersion: webPromptSchema.optional(),
+    baselinePromptVersion: webPromptSchema.optional(),
+    maxConcurrent: z.number().int().positive().max(16),
+  })
+  .refine(
+    (configuration) =>
+      new Set(configuration.promptVersions).size === configuration.promptVersions.length &&
+      (!configuration.defaultPromptVersion ||
+        configuration.promptVersions.includes(configuration.defaultPromptVersion)) &&
+      (!configuration.baselinePromptVersion ||
+        configuration.promptVersions.includes(configuration.baselinePromptVersion)) &&
+      (!configuration.prompts ||
+        (configuration.prompts.length === configuration.promptVersions.length &&
+          new Set(configuration.prompts.map((prompt) => prompt.id)).size ===
+            configuration.prompts.length &&
+          configuration.prompts.every((prompt) =>
+            configuration.promptVersions.includes(prompt.id),
+          ))),
+  );
 export const webRequestSchema = ticketSchema.extend({
   provider: webProviderSchema,
   promptVersion: webPromptSchema,

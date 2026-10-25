@@ -12,6 +12,7 @@ export { readSettings, readEnvironment } from './config.js';
 export type { ProviderSettings } from './config.js';
 export { AppError, publicError } from './errors.js';
 export { loadPrompts } from './prompts.js';
+export { PromptRegistry } from './prompt-registry.js';
 export type { PromptBundle, PromptVersion } from './prompts.js';
 export type { AssistantOptions, ProcessOptions, SupportRun } from './service.js';
 export type { RunTrace, EventSink } from './telemetry.js';

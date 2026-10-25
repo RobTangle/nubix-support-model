@@ -11,7 +11,7 @@ import { AppError, publicError } from './errors.js';
 import { createProvider } from './providers.js';
 import { loadPrices } from './budget.js';
 import { createEventSink } from './event-sink.js';
-import { loadPrompts, type PromptVersion } from './prompts.js';
+import { PromptRegistry } from './prompt-registry.js';
 import { readRuntimeSettings } from './runtime-settings.js';
 import { ticketSchema, type SupportResponse } from './schemas.js';
 import { SupportAssistant } from './service.js';
@@ -27,7 +27,8 @@ Opciones:
   --stdin      Leer un ticket desde la entrada estándar hasta EOF.
   --provider   openai (predeterminado), xai o google-ai.
   --env-file   Archivo de variables; por defecto, .env en la raíz del repositorio.
-  --prompt-version basic-v1 (predeterminado) o basic-v2, con ejemplos few-shot.
+  --prompt-version ID registrado; por defecto usa default de prompt-registry.yaml.
+  --list-prompts Listar IDs, etiquetas, default y baseline sin consumir API.
   --telemetry-file Archivo JSONL opcional, además de stderr.
   --flow-events Emitir también los eventos finos de ejecución con timestamps.
   --reports-dir Directorio de JSONs por ejecución; por defecto, reports/manual-tests del proyecto TS.
@@ -63,7 +64,8 @@ async function main(): Promise<void> {
         stdin: { type: 'boolean' },
         provider: { type: 'string', default: 'openai' },
         'env-file': { type: 'string' },
-        'prompt-version': { type: 'string', default: 'basic-v1' },
+        'prompt-version': { type: 'string' },
+        'list-prompts': { type: 'boolean' },
         'telemetry-file': { type: 'string' },
         'flow-events': { type: 'boolean' },
         'reports-dir': { type: 'string' },
@@ -79,18 +81,40 @@ async function main(): Promise<void> {
     process.stdout.write(help);
     return;
   }
+  if (parsedArgs.values['list-prompts']) {
+    if (
+      parsedArgs.values.text !== undefined ||
+      parsedArgs.values.stdin ||
+      parsedArgs.values['prompt-version']
+    )
+      throw new AppError('invalid_arguments');
+    const registry = await PromptRegistry.load();
+    process.stdout.write(
+      JSON.stringify(
+        {
+          defaultVersion: registry.defaultVersion,
+          baselineVersion: registry.baselineVersion,
+          versions: registry.versions,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    return;
+  }
   if ((parsedArgs.values.text !== undefined) === Boolean(parsedArgs.values.stdin))
     throw new AppError('invalid_arguments');
   const text = parsedArgs.values.stdin ? await readTicketFromStdin() : parsedArgs.values.text;
   const ticket = ticketSchema.safeParse({ text });
   if (!ticket.success) throw new AppError('invalid_input');
-  if (!['basic-v1', 'basic-v2'].includes(parsedArgs.values['prompt-version']))
-    throw new AppError('invalid_arguments');
+  const registry = await PromptRegistry.load();
+  const version = parsedArgs.values['prompt-version'] ?? registry.defaultVersion;
+  if (!registry.has(version)) throw new AppError('invalid_arguments');
   const env = await readEnvironment(parsedArgs.values['env-file']);
   const settings = readSettings(parsedArgs.values.provider, env);
   const prices = await loadPrices();
   prices.get(settings.provider, settings.model);
-  const prompts = await loadPrompts(parsedArgs.values['prompt-version'] as PromptVersion);
+  const prompts = registry.get(version);
   const runtimeSettings = readRuntimeSettings(env);
   const recorder = await RunReportWriter.create({
     text: text as string,

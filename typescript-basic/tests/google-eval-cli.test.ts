@@ -124,3 +124,42 @@ test('Google AI eval CLI: presupuesto agotado preserva checkpoints y casos pendi
   assert.ok(result.reports.every((report) => report.stopReason === 'eval_budget_exceeded'));
   assert.ok(result.reports.every((report) => report.metrics.llmCalls === 0));
 });
+
+test('eval CLI: selección de variantes y baseline explícito provienen del registro', async () => {
+  const result = await run([
+    'compare',
+    '--prompt-versions',
+    'basic-v2,basic-v1',
+    '--baseline-prompt',
+    'basic-v2',
+  ]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.reports.map((report) => report.promptVersion).sort(), [
+    'basic-v1',
+    'basic-v2',
+  ]);
+  assert.ok(
+    result.reports.every((report) => report.provenance.baselinePromptVersion === 'basic-v2'),
+  );
+  const rejected = await run(['compare', '--prompt-versions', 'basic-v1,unknown']);
+  assert.equal(rejected.status, 1);
+  assert.equal(JSON.parse(rejected.stderr).error.code, 'invalid_arguments');
+  assert.equal(rejected.reports.length, 0);
+});
+
+test('eval CLI: listar prompts es offline y publica defaults y etiquetas del registro', () => {
+  const result = spawnSync(process.execPath, [cli, '--list-prompts'], {
+    cwd: tmpdir(),
+    env: { PATH: process.env.PATH },
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const listed = JSON.parse(result.stdout);
+  assert.equal(listed.defaultVersion, 'basic-v1');
+  assert.equal(listed.baselineVersion, 'basic-v1');
+  assert.ok(
+    listed.versions.every((entry: { id: string; label: string }) => entry.id && entry.label),
+  );
+});

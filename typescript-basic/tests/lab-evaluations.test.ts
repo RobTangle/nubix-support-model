@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -12,6 +13,8 @@ import { readRuntimeSettings } from '../src/runtime-settings.js';
 import { SupportAssistant } from '../src/service.js';
 import { loadDataset } from '../src/evals/data.js';
 import { createApp } from '../src/web/app.js';
+import { PromptRegistry } from '../src/prompt-registry.js';
+import { extendedRegistry } from './fixtures/extended-registry.js';
 
 const input = {
   provider: 'openai',
@@ -21,12 +24,13 @@ const input = {
   compareModeration: false,
 };
 
-async function fixture() {
+async function fixture(extraVersion = false) {
   const outputDir = await mkdtemp(join(tmpdir(), 'nubbix-lab-eval-'));
   const store = new LabStore(':memory:');
   const prices = await loadPrices();
   const dataset = await loadDataset();
   const service = new LabEvaluationService({
+    registry: extraVersion ? await extendedRegistry(outputDir) : await PromptRegistry.load(),
     store,
     mode: 'demo',
     models: new Map([['openai', 'gpt-6-luna']]),
@@ -150,6 +154,65 @@ test('jobs eval: cancelación inmediata conserva casos not_run y no acredita éx
         notes: '',
       }),
     );
+  } finally {
+    await lab.close();
+  }
+});
+
+test('jobs eval: versión nueva por registro y selección explícita comparten los mismos contratos', async () => {
+  const lab = await fixture(true);
+  try {
+    assert.throws(() => lab.service.start({ ...input, promptVersions: ['basic-v1', 'missing'] }));
+    assert.throws(() =>
+      lab.service.start({
+        ...input,
+        promptVersions: ['basic-v1', 'experiment-v3'],
+        baselinePromptVersion: 'basic-v2',
+      }),
+    );
+    const { jobId } = lab.service.start({
+      ...input,
+      promptVersions: ['basic-v1', 'experiment-v3'],
+      baselinePromptVersion: 'basic-v1',
+    });
+    for (let count = 0; lab.service.get(jobId)!.job.status === 'running' && count < 500; count++)
+      await nextTurn();
+    const result = lab.service.get(jobId)!;
+    assert.equal(result.job.status, 'completed');
+    assert.deepEqual(
+      result.reports.map((report) => report.promptVersion),
+      ['basic-v1', 'experiment-v3'],
+    );
+    assert.deepEqual((result.job.input as { promptVersions: string[] }).promptVersions, [
+      'basic-v1',
+      'experiment-v3',
+    ]);
+    assert.ok(
+      result.reports.every((report) => report.provenance.baselinePromptVersion === 'basic-v1'),
+    );
+  } finally {
+    await lab.close();
+  }
+});
+
+test('historia eval: leer selecciones retiradas no exige registro ni ejecuta targets', async () => {
+  const lab = await fixture();
+  const jobId = randomUUID();
+  try {
+    lab.store.createRun({
+      id: jobId,
+      kind: 'evaluation',
+      mode: 'demo',
+      provider: 'openai',
+      model: 'gpt-6-luna',
+      promptVersion: 'retired-v1,retired-v2',
+      input: { ...input, promptVersion: 'retired-v1' },
+    });
+    lab.store.finishRun(jobId, { status: 'interrupted' });
+    const snapshot = lab.service.get(jobId)!;
+    assert.equal(snapshot.job.status, 'interrupted');
+    assert.equal(snapshot.progress.total, 120);
+    assert.deepEqual(snapshot.reports, []);
   } finally {
     await lab.close();
   }
