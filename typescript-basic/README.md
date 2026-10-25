@@ -78,22 +78,29 @@ Leé la [guía Python ↔ TypeScript](../docs/typescript-python-guide.md) para s
 
 Los diagramas usan Mermaid: GitHub los renderiza dentro del README. Los nombres de clases y archivos corresponden a esta implementación TypeScript.
 
+**Cómo leer los actores:** los nodos azules rotulados **LLM / REQUEST** hacen una llamada de red al modelo configurado; los grises rotulados **CÓDIGO** ejecutan lógica local, sin consultar al modelo; los naranjas rotulados **HUMANO** requieren que una persona lea y califique. El texto identifica al actor aunque no se vean los colores.
+
+**La moderación sí usa el LLM:** hay una request para juzgar la entrada, otra para clasificar y responder, y otra para juzgar la propuesta completa. Las tres usan el proveedor/modelo seleccionado y prompts distintos. No hay una persona revisando dentro de ese flujo automático. Agregar una acción de derivación sólo sugiere una intervención posterior: no asigna el caso ni espera una aprobación humana.
+
 ### Recorrido resumido
 
 ```mermaid
 flowchart TD
-  A["Ticket desde CLI"] --> B["Validar entrada con Zod"]
-  B --> C["Moderar entrada"]
-  C -->|allow| D["Clasificar y proponer respuesta"]
-  D --> E["Validar contrato y agregar revisión si confidence menor a 0.70"]
-  E --> F["Moderar answer y actions"]
-  F -->|allow| G["Archivar reporte y publicar JSON"]
-  C -->|review, block o refusal| H["Respuesta estática para derivación humana"]
+  A["CÓDIGO: leer ticket desde CLI"] --> B["CÓDIGO: validar entrada con Zod"]
+  B --> C["LLM / REQUEST 1<br/>Juzgar seguridad del ticket; devolver decision"]
+  C -->|allow| D["LLM / REQUEST 2<br/>Clasificar y proponer answer y actions"]
+  D --> E["CÓDIGO: validar JSON; agregar sugerencia de revisión si confidence menor a 0.70"]
+  E --> F["LLM / REQUEST 3<br/>Juzgar seguridad y respaldo de answer y actions"]
+  F -->|allow| G["CÓDIGO: archivar reporte y publicar JSON"]
+  C -->|review, block o refusal| H["CÓDIGO: respuesta estática con sugerencia de derivación humana"]
   F -->|review, block o refusal| H
   D -->|refusal| H
   H --> G
-  B -->|entrada inválida| I["Error sanitizado; sin respuesta en stdout"]
+  B -->|entrada inválida| I["CÓDIGO: error sanitizado; sin respuesta en stdout"]
   C & D & F -->|fallo operativo tras intentos permitidos| I
+  classDef default fill:#f1f5f9,stroke:#475569,color:#0f172a
+  classDef llm fill:#dbeafe,stroke:#1d4ed8,color:#0f172a
+  class C,D,F llm
 ```
 
 Hay normalmente tres llamadas al LLM. Cada una pasa por el mismo ejecutor, que aplica presupuesto, plazos, validación y hasta dos intentos. Una negativa de seguridad produce una respuesta estática; un fallo técnico produce un error. Las acciones son sugerencias para una persona.
@@ -102,46 +109,41 @@ Hay normalmente tres llamadas al LLM. Cada una pasa por el mismo ejecutor, que a
 
 ```mermaid
 flowchart TD
-  A["cli.ts: leer argumentos o stdin"] --> B{"ticketSchema: entrada válida?"}
-  B -->|no| ERR["AppError sanitizado; exit 2"]
-  B -->|sí| C["Cargar configuración, tarifa, YAML y hashes"]
-  C --> D["RunReportWriter: reservar archivo running antes de consumir API"]
-  D --> E["Crear adaptador SDK y SupportAssistant"]
-  E --> F["runSession: presupuesto y traza locales; deadline de 60 s"]
-  F --> IN["StructuredExecutor: input_moderation"]
-  IN --> IV{"Decisión allow?"}
-  IV -->|no o refusal| SAFE["safeResponse: other, confidence 0, derivación humana"]
-  IV -->|sí| GEN["StructuredExecutor: generation; contrato SupportResponse"]
+  A["CÓDIGO / cli.ts: leer argumentos o stdin"] --> B{"CÓDIGO / Zod: entrada válida?"}
+  B -->|no| ERR["CÓDIGO: AppError sanitizado; exit 2"]
+  B -->|sí| C["CÓDIGO: cargar configuración, tarifa, YAML y hashes"]
+  C --> D["CÓDIGO / RunReportWriter: reservar archivo running"]
+  D --> E["CÓDIGO: crear cliente SDK y SupportAssistant; todavía sin request"]
+  E --> F["CÓDIGO / runSession: presupuesto y traza locales; deadline de 60 s"]
+  F --> IN["LLM / REQUEST 1 / input_moderation<br/>Enviar prompt de seguridad y ticket; recibir decision"]
+  IN --> IV{"CÓDIGO: decision validada es allow?"}
+  IV -->|no o refusal| SAFE["CÓDIGO / safeResponse: other, confidence 0, sugerir derivación humana"]
+  IV -->|sí| GEN["LLM / REQUEST 2 / generation<br/>Enviar prompt de soporte y ticket; recibir SupportResponse"]
   GEN -->|refusal| SAFE
-  GEN --> CF{"confidence menor a 0.70?"}
-  CF -->|sí| HR["Agregar revisión humana; conservar hasta cinco acciones"]
-  CF -->|no| OUT["StructuredExecutor: output_moderation sobre el objeto final"]
+  GEN --> CF{"CÓDIGO: confidence validada menor a 0.70?"}
+  CF -->|sí| HR["CÓDIGO: agregar sugerencia de revisión; ninguna persona interviene aquí"]
+  CF -->|no| OUT["LLM / REQUEST 3 / output_moderation<br/>Enviar prompt de seguridad y propuesta final; recibir decision"]
   HR --> OUT
-  OUT --> OV{"Decisión allow?"}
+  OUT --> OV{"CÓDIGO: decision validada es allow?"}
   OV -->|no o refusal| SAFE
-  OV -->|sí| OK["Conservar propuesta validada"]
-  SAFE & OK --> FIN["Cerrar traza y telemetría; finalizar reporte"]
-  FIN --> PUB["stdout: answer, confidence, category, actions"]
+  OV -->|sí| OK["CÓDIGO: conservar propuesta validada"]
+  SAFE & OK --> FIN["CÓDIGO: cerrar traza y telemetría; finalizar reporte"]
+  FIN --> PUB["CÓDIGO / stdout: answer, confidence, category, actions"]
   C & D & E & F & IN & GEN & OUT -->|error| ERR
-  ERR --> ARCH["Si se reservó reporte, registrar el fallo y la traza disponible"]
-  ARCH --> STOP["stderr: error JSONL; stdout vacío"]
-
-  subgraph EXEC["Dentro de cada llamada de StructuredExecutor"]
-    X1["Comprobar cancelación, plazo y presupuestos"] --> X2["Reservar costo estimado antes de llamar"]
-    X2 --> X3["Adaptador del proveedor: JSON Schema; timeout hasta 15 s"]
-    X3 --> X4["Normalizar estado y tokens; validar JSON con Zod"]
-    X4 --> X5["Conciliar costo o conservar reserva desconocida; emitir evento"]
-    X5 --> X6{"Error transitorio o JSON inválido, y queda un intento?"}
-    X6 -->|sí| X7["Espera acotada o instrucción YAML de reparación"]
-    X7 --> X1
-    X6 -->|no| X8["Devolver valor, refusal o error al servicio"]
-  end
-  IN -.-> X1
-  GEN -.-> X1
-  OUT -.-> X1
+  ERR --> ARCH["CÓDIGO: si se reservó reporte, guardar fallo y traza disponible"]
+  ARCH --> STOP["CÓDIGO / stderr: error JSONL; stdout vacío"]
+  CTRL["CÓDIGO / StructuredExecutor<br/>Antes: presupuesto y timeout; después: JSON, Zod, costo y evento<br/>Hasta dos intentos por etapa"]
+  CTRL -.-> IN
+  CTRL -.-> GEN
+  CTRL -.-> OUT
+  classDef default fill:#f1f5f9,stroke:#475569,color:#0f172a
+  classDef llm fill:#dbeafe,stroke:#1d4ed8,color:#0f172a
+  class IN,GEN,OUT llm
 ```
 
-El bloque del ejecutor explica las tres cajas de llamadas; sus flechas punteadas representan reutilización, no llamadas adicionales. La telemetría de intentos y cierre contiene sólo metadatos. El reporte manual separado conserva contenido para inspección. Si falla el archivado o el cierre de telemetría, la CLI devuelve error en lugar de publicar la propuesta; los fallos de configuración anteriores a la reserva no crean un reporte.
+Las tres cajas azules son las tres requests al proveedor. Internamente, cada una recorre `StructuredExecutor.call()` → `provider.complete()` → SDK → API del proveedor. La caja gris del ejecutor y sus flechas punteadas describen controles locales compartidos: no agregan otra request. Un reintento sí repite la request de su etapa y consume presupuesto; un bloqueo temprano omite las etapas posteriores. Zod valida la estructura localmente: no pide al LLM que valide JSON.
+
+La telemetría de intentos y cierre contiene sólo metadatos. El reporte manual separado conserva contenido para inspección. Si falla el archivado o el cierre de telemetría, la CLI devuelve error en lugar de publicar la propuesta; los fallos de configuración anteriores a la reserva no crean un reporte.
 
 ## Organización
 
@@ -192,53 +194,77 @@ La [guía de evaluaciones TypeScript](../docs/typescript-evaluations.md) explica
 
 ```mermaid
 flowchart TD
-  A["compare: Google AI, basic-v1 y basic-v2, split dev"] --> B["40 tickets y 20 casos de seguridad por versión"]
-  B --> C["EvalRunner: alternar versiones por caso; mismo SupportAssistant"]
-  C --> D["Dos reportes JSON, resúmenes Markdown y plantillas JSONL"]
-  D --> E["Persona: revisar respuestas contra ticket y manual"]
-  E --> F["compare --reports: validar contexto y revisión, offline"]
-  F --> G{"Ambas revisiones completas y alguna candidata elegible?"}
-  G -->|no| H["Revisión pendiente o metas no alcanzadas"]
-  G -->|sí| I["Recomendar por macro-F1, costo y p95"]
-  I --> J["Evaluar la configuración elegida en test"]
+  A["CÓDIGO / compare: preparar 60 casos por versión, basic-v1 y basic-v2"] --> B["CÓDIGO / EvalRunner: elegir caso y versión"]
+  B --> L1["LLM / REQUEST 1<br/>Revisar seguridad de entrada"]
+  L1 -->|allow| L2["LLM / REQUEST 2<br/>Clasificar y responder"]
+  L2 -->|propuesta válida| L3["LLM / REQUEST 3<br/>Revisar seguridad y respaldo de la propuesta"]
+  L3 -->|allow| D["CÓDIGO: calcular métricas y guardar respuestas en reportes"]
+  L1 & L2 & L3 -->|bloqueo, refusal o fallo| EARLY["CÓDIGO: registrar respuesta estática o error; omitir etapas restantes"]
+  EARLY --> D
+  D --> E["HUMANO: leer ticket, respuesta y manual; editar reviews.jsonl"]
+  E --> F["CÓDIGO / compare --reports: leer calificaciones y aplicar reglas, offline"]
+  F --> G{"CÓDIGO: revisiones completas y alguna candidata elegible?"}
+  G -->|no| H["CÓDIGO: revisión pendiente o metas no alcanzadas"]
+  G -->|sí| I["CÓDIGO: recomendar por macro-F1, costo y p95"]
+  I --> J["Repetir ejecución con LLM y revisión HUMANA sobre test"]
+  classDef default fill:#f1f5f9,stroke:#475569,color:#0f172a
+  classDef llm fill:#dbeafe,stroke:#1d4ed8,color:#0f172a
+  classDef human fill:#ffedd5,stroke:#c2410c,color:#0f172a
+  class L1,L2,L3 llm
+  class E human
 ```
 
 `basic-v2` agrega cuatro ejemplos al contexto de `basic-v1`; mantiene manual y políticas. Una comparación completa procesa 120 combinaciones de caso y versión. Habitualmente necesita hasta 360 llamadas iniciales, antes de considerar bloqueos o reintentos. Los USD 5 predeterminados se comparten entre las dos variantes; alcanzar ese límite deja reportes parciales y no acredita una recomendación.
+
+**No hay un LLM juez adicional en las evals.** Las requests 1 y 3 son los moderadores del servicio que estamos evaluando; sus decisiones también pueden estar equivocadas. El código calcula accuracy, F1, costos y reglas regex sin llamar al modelo. Una persona revisa utilidad, corrección, respeto del manual, ataques y falsos bloqueos. Después `summarize` y `compare --reports` sólo leen esas calificaciones y calculan resultados: no solicitan nuevas revisiones a un LLM ni a una persona automáticamente.
 
 ### Evaluaciones: recorrido detallado
 
 ```mermaid
 flowchart TD
-  A["eval-cli.ts"] --> MODE{"Comando live u offline?"}
-  MODE -->|run, compare, adversarial| INIT["Validar proveedor, modelo, tarifa y límites"]
-  INIT --> DATA["Validar dataset, splits, IDs y regex; cargar YAML y hashes"]
-  DATA --> PLAN["Crear variantes y presupuesto compartido; reservar reportes con casos notRun"]
-  PLAN --> NEXT["Elegir siguiente caso y variante; alternar orden en compare"]
-  NEXT --> CALL["SupportAssistant.process: mismo flujo que la app"]
-  CALL --> RECORD["Guardar response, trace, error y rawOutputs sintéticos"]
-  RECORD --> RULES["Indicadores sobre salida publicada e intermedia por separado"]
-  RULES --> CHECK["Recalcular métricas y guardar checkpoint"]
-  CHECK --> HALT{"Error fatal, presupuesto agotado o cancelación?"}
-  HALT -->|sí| PART["Registrar stopReason y conservar casos restantes notRun"]
-  HALT -->|no| MORE{"Quedan combinaciones?"}
+  A["CÓDIGO / eval-cli.ts"] --> MODE{"CÓDIGO: comando live u offline?"}
+  MODE -->|run, compare, adversarial| INIT["CÓDIGO: validar configuración, dataset y regex; cargar YAML y hashes"]
+  INIT --> PLAN["CÓDIGO: reservar reportes notRun y presupuesto compartido"]
+  PLAN --> NEXT["CÓDIGO: elegir caso y variante; alternar orden en compare"]
+  NEXT --> L1["LLM / REQUEST 1 / input_moderation<br/>Modelo seleccionado juzga el ticket"]
+  L1 -->|allow validado con Zod| L2["LLM / REQUEST 2 / generation<br/>Modelo seleccionado clasifica y responde"]
+  L2 --> VALID["CÓDIGO: validar respuesta con Zod y agregar sugerencia si confidence baja"]
+  VALID --> L3["LLM / REQUEST 3 / output_moderation<br/>Modelo seleccionado juzga answer y actions"]
+  L3 -->|allow validado con Zod| RECORD["CÓDIGO: guardar response, trace, error y rawOutputs"]
+  L1 & L3 -->|review, block o refusal| SAFE["CÓDIGO: reemplazar propuesta por respuesta estática"]
+  L2 -->|refusal| SAFE
+  SAFE --> RECORD
+  L1 & L2 & L3 & VALID -->|fallo operativo tras intentos permitidos| ERROR["CÓDIGO: registrar error; no publicar propuesta"]
+  ERROR --> RECORD
+  RECORD --> RULES["CÓDIGO: regex, clasificación vs etiqueta, costos y latencias; sin LLM juez"]
+  RULES --> CHECK["CÓDIGO: recalcular métricas y guardar checkpoint"]
+  CHECK --> HALT{"CÓDIGO: error fatal, presupuesto agotado o cancelación?"}
+  HALT -->|sí| PART["CÓDIGO: guardar stopReason y conservar pendientes notRun"]
+  HALT -->|no| MORE{"CÓDIGO: quedan combinaciones?"}
   MORE -->|sí| NEXT
-  MORE -->|no| FINISH["Finalizar JSON, Markdown y plantilla reviews.jsonl por variante"]
+  MORE -->|no| FINISH["CÓDIGO: finalizar JSON, Markdown y plantilla reviews.jsonl"]
   PART --> FINISH
-  FINISH --> HUMAN["Revisión humana: utilidad, corrección, manual, ataques y controles"]
-  HUMAN --> OFF["Cargar reportes y revisiones con Zod"]
+  FINISH --> HUMAN["HUMANO / fuera de la CLI<br/>Leer casos y respuestas; contrastar manual; calificar en reviews.jsonl"]
+  HUMAN --> OFF["CÓDIGO: cargar reportes y calificaciones humanas con Zod"]
   MODE -->|summarize o compare --reports| OFF
-  OFF --> OP{"Resumir o comparar?"}
-  OP -->|summarize| SUM["Métricas, evaluación humana y gates por corrida"]
-  OP -->|compare --reports| COMPAT{"Dos prompts de dev y mismo contexto?"}
-  COMPAT -->|no| BAD["invalid_report: no comparar experimentos incompatibles"]
-  COMPAT -->|sí| REVIEW{"Faltan campos de revisión aplicables?"}
-  REVIEW -->|sí| PEND["pending_human_review; sin recomendación"]
-  REVIEW -->|no| GATES["Exigir evidencia live, corrida completa, consumo conocido y metas"]
-  GATES --> RANK["Descartar regresiones humanas y de seguridad; ordenar candidatas elegibles"]
-  RANK --> RESULT["Recomendación de dev o acceptance_failed"]
-  RESULT --> TEST["Si hubo recomendación: run del prompt elegido sobre test"]
+  OFF --> OP{"CÓDIGO: resumir o comparar?"}
+  OP -->|summarize| SUM["CÓDIGO: mostrar métricas, calificaciones agregadas y gates"]
+  OP -->|compare --reports| COMPAT{"CÓDIGO: dos prompts de dev y mismo contexto?"}
+  COMPAT -->|no| BAD["CÓDIGO: invalid_report"]
+  COMPAT -->|sí| REVIEW{"CÓDIGO: faltan calificaciones humanas aplicables?"}
+  REVIEW -->|sí| PEND["CÓDIGO: pending_human_review; sin recomendación"]
+  REVIEW -->|no| GATES["CÓDIGO: aplicar metas, descartar regresiones y ordenar candidatas"]
+  GATES --> RESULT["CÓDIGO: recomendación de dev o acceptance_failed"]
+  RESULT --> TEST["Si hubo recomendación: repetir requests LLM y revisión HUMANA en test"]
+  classDef default fill:#f1f5f9,stroke:#475569,color:#0f172a
+  classDef llm fill:#dbeafe,stroke:#1d4ed8,color:#0f172a
+  classDef human fill:#ffedd5,stroke:#c2410c,color:#0f172a
+  class L1,L2,L3 llm
+  class HUMAN human
 ```
 
 Las regex son señales, no un juez semántico. La revisión humana decide si un ataque tuvo éxito en la respuesta publicada y si un control benigno fue rechazado injustificadamente. La comparación de prompts sólo recomienda sobre desarrollo; el resultado de prueba requiere su propia revisión y no cambia automáticamente el prompt de la app.
+
+La CLI live termina después de escribir los reportes y plantillas: no queda esperando a un revisor. La flecha hacia **HUMANO** representa el siguiente paso del trabajo, que hacés editando los archivos. Luego ejecutás los comandos offline. Un estado `pending_human_review` indica que faltan esas calificaciones; no dispara una request a otro modelo.
 
 `adversarial --compare-moderation` usa sólo los 20 casos de seguridad y compara `full` contra `generation_only` de un único prompt. Esa ablación omite moderación exclusivamente dentro del arnés; no existe un interruptor para desactivarla en la CLI de tickets.

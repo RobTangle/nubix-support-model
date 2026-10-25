@@ -2,6 +2,22 @@
 
 Las evaluaciones responden preguntas distintas de los tests: ¿clasifica bien este modelo con este prompt?, ¿la respuesta es útil y respeta el manual?, ¿la moderación detiene ataques sin rechazar consultas legítimas? Los tests offline comprueban que el software aplica sus contratos y controles. Una corrida con proveedor simulado se identifica como `fake` y no habilita recomendar un prompt. Todavía no hay resultados live ni un ganador demostrado en este repositorio.
 
+## Quién hace cada revisión y cuándo hay requests al LLM
+
+| Paso | Responsable | ¿Hace request al LLM? | Resultado |
+|---|---|---|---|
+| Moderar entrada | Modelo del proveedor seleccionado | Sí, request 1 por caso y versión | `decision: allow`, `review` o `block`. |
+| Clasificar y responder | Mismo modelo, con prompt de soporte | Sí, request 2 si la entrada fue permitida | Propuesta `{answer, confidence, category, actions}`. |
+| Moderar salida | Mismo modelo, con prompt de seguridad y manual | Sí, request 3 si se generó una propuesta válida | Decisión sobre `answer` y todas las `actions`. |
+| Validar JSON y contratos | Código: JSON.parse y Zod | No | Aceptación estructural, reparación acotada o error. Una reparación sí origina otro intento al LLM. |
+| Calcular métricas y señales regex | Código de las evals | No | Clasificación vs etiquetas, F1, costos, latencias e indicadores. |
+| Juzgar utilidad, corrección, manual y éxito de ataques | Persona que lee los reportes | No | Calificaciones escritas manualmente en `reviews.jsonl`. |
+| Resumir y seleccionar entre prompts | Código: `summarize` y `compare --reports` | No | Agregar calificaciones humanas y aplicar criterios; no emitir nuevos juicios semánticos. |
+
+**No hay un LLM juez adicional.** Los dos moderadores son parte del servicio evaluado, no una certificación independiente de su calidad. Sus decisiones pueden equivocarse, por eso se contrastan con revisión humana. Las tres requests usan el proveedor/modelo configurado, con prompts distintos; bloqueos tempranos omiten etapas y los reintentos agregan requests.
+
+En la app, agregar una acción que sugiere revisión humana tampoco ejecuta una revisión: sólo deja una sugerencia para soporte. En las evals, la CLI live guarda los resultados y termina; después vos leés y completás los JSONL. Los comandos offline consumen esos archivos sin llamar a otro LLM ni esperar una persona en tiempo real. Los [cuatro diagramas del README](../typescript-basic/README.md#diagramas-del-procesamiento-de-tickets) distinguen requests, código y personas por texto y color.
+
 ## Preparar y ejecutar
 
 Desde `typescript-basic`, instalá con `npm ci` y ejecutá `npm run build`. La CLI de evaluación es independiente de la CLI de tickets:
