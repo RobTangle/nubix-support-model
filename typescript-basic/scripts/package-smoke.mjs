@@ -43,6 +43,9 @@ try {
     'dist/resources/shared/datasets/tickets.jsonl',
     'dist/resources/shared/datasets/adversarial.jsonl',
     'dist/resources/safety.yaml',
+    'dist/web/public/index.html',
+    'dist/web/public/app.js',
+    'dist/web/public/styles.css',
   ])
     assert.ok(packed.files.some((file) => file.path === resource));
   await writeFile(join(temporary, 'package.json'), '{"private":true,"type":"module"}\n');
@@ -96,7 +99,7 @@ try {
   assert.equal(archived.invocation.workingDirectory, temporary);
   assert.deepEqual(archived.response, JSON.parse(response.stdout));
   // Una factory falsa prueba el paquete instalado y su procedencia sin atribuir calidad al modelo.
-  const fixture = `
+  const fixture = String.raw`
     import assert from 'node:assert/strict';
     const {SupportAssistant,loadPrompts,loadPrices,readRuntimeSettings}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'index.js')).href)});
     const {EvalRunner}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'evals', 'runner.js')).href)});
@@ -112,11 +115,32 @@ try {
     assert.ok(report.provenance.sdkVersions.xai);
     assert.ok(report.provenance.sdkVersions['google-ai']);
     assert.equal(report.provider,'google-ai');
+    const {createApp}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'web', 'app.js')).href)});
+    const {DemoProvider}=await import(${JSON.stringify(pathToFileURL(join(installed, 'dist', 'web', 'demo-provider.js')).href)});
+    const prompts=await loadPrompts();
+    const app=createApp({configuration:{mode:'demo',providers:[{id:'google-ai',label:'Google AI',model:'gemini-3.5-flash-lite',available:true}],promptVersions:['basic-v1','basic-v2'],maxConcurrent:2},createAssistant:()=>new SupportAssistant({provider:new DemoProvider(),providerName:'google-ai',model:'gemini-3.5-flash-lite',prompts,prices,settings})});
+    const server=app.listen(0,'127.0.0.1');
+    await new Promise(resolve=>server.once('listening',resolve));
+    try {
+      const origin='http://127.0.0.1:'+server.address().port;
+      assert.equal((await fetch(origin+'/')).status,200);
+      assert.equal((await fetch(origin+'/app.js')).status,200);
+      const stream=await fetch(origin+'/api/support/stream',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'Necesito una factura',provider:'google-ai',promptVersion:'basic-v1'})});
+      const frames=(await stream.text()).trim().split('\n').map(line=>JSON.parse(line));
+      assert.equal(frames[0].type,'accepted');
+      assert.equal(frames.at(-1).type,'result');
+      assert.equal(frames.at(-1).mode,'demo');
+      assert.equal(frames.filter(frame=>frame.type==='event'&&frame.event.event==='llm.request.started').length,3);
+    } finally {
+      await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});
+    }
   `;
   const fixturePath = join(temporary, 'eval-smoke.mjs');
   await writeFile(fixturePath, fixture);
   run(process.execPath, [fixturePath], temporary);
-  console.log('Package smoke OK: CLI, YAML, corpus, SDK hoisting y evals offline.');
+  console.log(
+    'Package smoke OK: CLI, YAML, corpus, SDK hoisting, evals y panel HTTP demo offline.',
+  );
 } finally {
   // Verificar el destino antes de borrar recursivamente, también en Windows.
   const insideTemp = relative(resolve(tmpdir()), resolve(temporary));

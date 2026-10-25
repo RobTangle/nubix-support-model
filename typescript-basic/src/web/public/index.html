@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Nubbix Flow Lab · Observabilidad en vivo</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="Nubbix Flow Lab, inicio"
+          ><span class="brand-mark" aria-hidden="true">N</span
+          ><span>Nubbix <span class="brand-light">Flow Lab</span></span></a
+        >
+        <span id="mode-label" class="mode-badge">CONECTANDO…</span>
+      </header>
+      <main>
+        <section class="intro" aria-labelledby="page-title">
+          <p class="eyebrow">OBSERVABILIDAD · TYPESCRIPT + EXPRESS</p>
+          <h1 id="page-title">Seguí un ticket.<br /><span>Entendé cada paso.</span></h1>
+          <p class="intro-description">
+            Desde la validación hasta la respuesta final: requests al LLM, decisiones, tiempos y
+            consumo, a medida que ocurren.
+          </p>
+        </section>
+        <div class="workspace">
+          <aside class="control-column">
+            <section class="panel ticket-panel" aria-labelledby="ticket-title">
+              <div class="panel-heading">
+                <span class="section-number">01</span>
+                <h2 id="ticket-title">Prepará tu consulta</h2>
+              </div>
+              <p id="mode-description" class="mode-description">
+                Cargando configuración del servidor…
+              </p>
+              <form id="support-form">
+                <label for="ticket">Ticket de soporte</label>
+                <textarea id="ticket" name="text" rows="6" required aria-describedby="ticket-help">
+Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar los cargos.</textarea>
+                <p id="ticket-help" class="field-help">
+                  Hasta 8000 puntos Unicode. Usá datos ficticios para experimentar.
+                </p>
+                <div class="examples" aria-label="Ejemplos de tickets">
+                  <button type="button" data-example="billing">Facturación</button>
+                  <button type="button" data-example="technical">Técnico</button>
+                  <button type="button" data-example="account">Cuenta</button>
+                  <button type="button" data-example="other">Otros</button>
+                  <button type="button" data-example="blocked">Bloqueo demo</button>
+                </div>
+                <label for="provider">Proveedor y modelo</label>
+                <select
+                  id="provider"
+                  name="provider"
+                  required
+                  aria-label="Proveedor y modelo"
+                ></select>
+                <label for="prompt-version">Versión del prompt</label>
+                <select id="prompt-version" name="promptVersion" required></select>
+                <div class="form-actions">
+                  <button id="run-button" class="primary-button" type="submit" disabled>
+                    Ejecutar ticket <span aria-hidden="true">↗</span>
+                  </button>
+                  <button id="cancel-button" class="secondary-button" type="button" disabled>
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </section>
+            <section class="legend-panel" aria-labelledby="legend-title">
+              <h2 id="legend-title">Quién hace cada paso</h2>
+              <p>
+                <span class="actor-badge badge-llm">LLM · REQUEST</span> Llamada al proveedor
+                seleccionado.
+              </p>
+              <p>
+                <span class="actor-badge badge-code">CÓDIGO</span> Validación, presupuesto y
+                registro local.
+              </p>
+              <p class="human-explanation">
+                La revisión humana puede sugerirse; este panel no asigna un agente ni ejecuta un LLM
+                juez.
+              </p>
+            </section>
+          </aside>
+          <section class="panel execution-panel" aria-labelledby="timeline-title">
+            <div class="timeline-header">
+              <div class="panel-heading">
+                <span class="section-number">02</span>
+                <h2 id="timeline-title">Flujo en vivo</h2>
+              </div>
+              <span id="event-count" class="event-count">0 eventos</span>
+            </div>
+            <div class="execution-status">
+              <span class="status-dot" aria-hidden="true"></span>
+              <p id="status-message" role="status" aria-live="polite">
+                Conectando con el servidor…
+              </p>
+            </div>
+            <div class="run-meta">
+              <span class="run-label">REQUEST ID</span
+              ><code id="run-id">Se asignará al ejecutar</code>
+            </div>
+            <div class="timeline-options">
+              <p>Timestamp UTC · tiempo transcurrido · duración</p>
+              <label><input id="follow-events" type="checkbox" checked /> Seguir eventos</label>
+            </div>
+            <div
+              id="timeline-viewport"
+              class="timeline-viewport"
+              tabindex="0"
+              aria-label="Eventos de la ejecución"
+            >
+              <div id="timeline-empty" class="empty-state">
+                <span class="empty-symbol" aria-hidden="true">⌁</span>
+                <h3>El recorrido empieza acá</h3>
+                <p>
+                  Elegí un ticket y ejecutalo para ver los eventos reales del backend. No hay pasos
+                  ni porcentajes simulados en la interfaz.
+                </p>
+              </div>
+              <ol id="timeline" class="timeline" aria-label="Línea de tiempo de eventos"></ol>
+            </div>
+            <p id="run-summary" class="run-summary"></p>
+          </section>
+        </div>
+        <section class="panel response-panel" aria-labelledby="response-title">
+          <div class="panel-heading">
+            <span class="section-number">03</span>
+            <h2 id="response-title">Resultado publicado</h2>
+          </div>
+          <p class="response-help">
+            La propuesta se muestra después de completar la moderación de salida, o como respuesta
+            estática ante un bloqueo. Las acciones son sugerencias.
+          </p>
+          <div id="result" class="result-content">
+            <p class="placeholder">
+              La respuesta final aparecerá cuando termine una ejecución válida.
+            </p>
+          </div>
+        </section>
+      </main>
+      <footer>
+        Laboratorio didáctico de Nubbix · Manual ficticio · La validez del JSON no demuestra calidad
+        semántica.
+      </footer>
+    </div>
+  </body>
+</html>

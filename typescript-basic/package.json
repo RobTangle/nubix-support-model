@@ -13,7 +13,8 @@
   "types": "./dist/index.d.ts",
   "bin": {
     "nubbix-support-ts": "./dist/cli.js",
-    "nubbix-support-eval": "./dist/eval-cli.js"
+    "nubbix-support-eval": "./dist/eval-cli.js",
+    "nubbix-support-web": "./dist/web/server.js"
   },
   "files": [
     "dist",
@@ -23,7 +24,10 @@
     "predev": "node scripts/copy-prompt.mjs",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
-    "build": "tsc && node scripts/copy-prompt.mjs",
+    "build": "tsc && node scripts/copy-prompt.mjs && node scripts/build-web.mjs",
+    "web": "npm run build && node dist/web/server.js",
+    "web:live": "npm run build && node dist/web/server.js --live",
+    "serve:web": "node dist/web/server.js",
     "smoke:package": "npm run build && node scripts/package-smoke.mjs",
     "check": "tsc --noEmit && tsc -p tsconfig.test.json",
     "format:check": "prettier --check src tests scripts",
@@ -34,12 +38,17 @@
     "@google/genai": "^2.31.0",
     "@xai-official/sdk": "0.2.5",
     "decimal.js": "10.6.0",
+    "express": "^5.3.0",
     "openai": "7.43.0",
     "yaml": "^2.8.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.3",
     "prettier": "3.9.10",
     "tsx": "^4.20.0",
     "typescript": "7.0.2"
