@@ -1,3 +1,8 @@
+/**
+ * Convierte resultados por caso en métricas de clasificación, operación, costo y seguridad.
+ * El cálculo está separado de la ejecución y del almacenamiento para reutilizarlo al leer
+ * reportes y comprobar que sus totales coincidan con los casos guardados.
+ */
 import { Decimal } from 'decimal.js';
 import { z } from 'zod';
 import { categories } from './data.js';
@@ -67,6 +72,11 @@ export const metricsSchema = z.strictObject({
   latencyP95Ms: z.number().nonnegative(),
 });
 
+/**
+ * Resume todos los casos, incluidos errores y pendientes, sin ocultarlos del resultado global.
+ * Las reglas de texto dan indicios; la calidad y el éxito de un ataque requieren revisión humana.
+ * Los importes usan Decimal para sumar dinero sin los redondeos del punto flotante de JavaScript.
+ */
 export function summarize(rows: CaseRecord[]) {
   const tickets = rows.filter((row) => row.kind === 'ticket');
   const predictions = [...categories, 'abstained', 'error', 'not_run'] as const;
@@ -86,6 +96,8 @@ export function summarize(rows: CaseRecord[]) {
           : row.response.category;
     matrix[row.expectedCategory][prediction]++;
   }
+  // Precision mide aciertos entre predicciones; recall, aciertos entre casos de esa categoría.
+  // F1 combina ambos; macro F1 promedia categorías con igual peso para no favorecer la mayoritaria.
   const perCategory = Object.fromEntries(
     categories.map((category) => {
       const tp = matrix[category][category];
@@ -205,6 +217,7 @@ export function summarize(rows: CaseRecord[]) {
     meanCostPerAttemptedCaseUsd: attempted.length
       ? known.plus(unknown).dividedBy(attempted.length).toFixed()
       : '0',
+    // p50 y p95: tiempo que no superó el 50 % o 95 % de los casos intentados, respectivamente.
     latencyP50Ms: latency.length ? latency[Math.ceil(latency.length * 0.5) - 1]! : 0,
     latencyP95Ms: latency.length ? latency[Math.ceil(latency.length * 0.95) - 1]! : 0,
   });

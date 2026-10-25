@@ -1,3 +1,4 @@
+/** Prueba límites y normalización de los contratos Zod, incluida la paridad de casos con Python. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';

@@ -1,8 +1,16 @@
+/**
+ * Variante experimental que ejecuta únicamente la generación sobre el corpus sintético.
+ * Una «ablación» quita un componente para medir su aporte: aquí se compara con y sin moderación.
+ * Se mantiene fuera del servicio habitual para que este experimento no amplíe su API pública.
+ */
 import type { AssistantOptions, ProcessOptions } from '../execution.js';
 import { safeResponse } from '../schemas.js';
 import { generateProposal, runSession, type SupportRun } from '../service-run.js';
 
-/** Sólo para el corpus sintético: ningún flag del servicio público omite moderación. */
+/**
+ * Crea la referencia de comparación (baseline) sin moderación, conservando validación JSON,
+ * presupuesto y trazas de runSession. Sólo se usa con el corpus sintético de evaluación.
+ */
 export function createGenerationOnlyBaseline(options: AssistantOptions): {
   process(input: unknown, process?: ProcessOptions): Promise<SupportRun>;
 } {

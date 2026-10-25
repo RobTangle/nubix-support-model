@@ -1,3 +1,8 @@
+/**
+ * Persistencia de una prueba manual por archivo JSON, con snapshots para inspección posterior.
+ * Separa el archivo detallado del sink de metadatos y del caso de uso: la CLI decide guardar una
+ * corrida, mientras este módulo controla reserva exclusiva, nombres y reemplazo del documento.
+ */
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -14,10 +19,14 @@ export class RunReportWriter {
     private readonly initial: RunReport,
   ) {}
 
+  /** Reserva el archivo running antes de consumir API; repetir un ticket crea otro reportId. */
   static async create(options: RunReportOptions): Promise<RunReportWriter> {
     try {
       const startedAt = new Date().toISOString();
       const reportId = randomUUID();
+      // Aquí el hash agrupa el mismo ticket normalizado entre proveedores y repeticiones. Es otro
+      // propósito que los prompt hashes: reportId distingue ejecuciones y runId enlaza su telemetría.
+      // No anonimiza el reporte: el ticket original también se guarda explícitamente en el JSON.
       const ticketId = createHash('sha256').update(options.normalizedText).digest('hex');
       const directory = resolve(
         options.directory ?? fileURLToPath(new URL('../../reports/manual-tests/', import.meta.url)),
@@ -55,6 +64,9 @@ export class RunReportWriter {
           model: options.model,
           promptVersion: options.prompts.version,
         },
+        // Las huellas permiten detectar cambios; los snapshots permiten inspeccionar el contenido
+        // que las produjo. Se copian ahora para que una mutación posterior no reescriba la historia.
+        // Guardamos campos elegidos, nunca el entorno ni el objeto del SDK que conserva credenciales.
         configuration: {
           runtimeSettings: structuredClone(options.runtimeSettings),
           prompts: structuredClone(options.prompts),
@@ -86,7 +98,10 @@ export class RunReportWriter {
     }
   }
 
+  /** Completa el reporte reservado con resultado o error, conservando su configuración inicial. */
   async finish(result: RunReportResult): Promise<void> {
+    // Escribir primero un temporal evita truncar el JSON running durante el reemplazo final.
+    // rename publica el archivo completo; no equivale a garantizar persistencia ante un corte de luz.
     const temporary = `${this.path}.${randomUUID()}.tmp`;
     try {
       const report: RunReport = {

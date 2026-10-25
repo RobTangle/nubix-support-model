@@ -1,4 +1,7 @@
-// Precarga exclusiva de tests: intercepta toda red ANTES de importar la CLI y sus SDK.
+/**
+ * Doble HTTP precargado en procesos de prueba antes de importar la CLI/SDKs. Genera respuestas
+ * controladas y simula fallos/señales para probar el programa completo sin llamadas reales al LLM.
+ */
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 

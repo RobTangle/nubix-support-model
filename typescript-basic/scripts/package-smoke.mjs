@@ -1,3 +1,8 @@
+/**
+ * Prueba de humo del artefacto distribuible: empaqueta, instala en un directorio temporal y ejecuta
+ * CLI/evals con respuestas falsas. Detecta recursos ausentes o dependencias mal resueltas que un
+ * test desde el repositorio podría ocultar. La instalación usa caché npm; los SDK no llaman a la API.
+ */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { copyFile, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -14,6 +19,7 @@ for (const key of Object.keys(environment))
 environment.OPENAI_API_KEY = 'fake-smoke';
 environment.XAI_API_KEY = 'fake-smoke';
 
+/** Ejecuta una etapa del smoke en otro proceso y falla con su diagnóstico si no termina con éxito. */
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
     cwd,

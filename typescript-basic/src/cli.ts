@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/**
+ * Entrada de terminal para un ticket: interpreta argumentos/stdin, prepara dependencias y publica
+ * el resultado. Conecta entorno, cliente, prompts, presupuesto, telemetría y archivo de testing;
+ * las decisiones de soporte pertenecen a service.ts para poder reutilizarlas fuera de la terminal.
+ */
 import { parseArgs } from 'node:util';
 import { StringDecoder } from 'node:string_decoder';
 import { readEnvironment, readSettings } from './config.js';
@@ -26,7 +31,10 @@ Opciones:
   --help       Mostrar esta ayuda sin usar credenciales ni llamar al proveedor.
 `;
 
-/** El límite se aplica mientras leemos: stdin no puede acumular un archivo ilimitado. */
+/**
+ * Lee stdin hasta EOF respetando caracteres UTF-8 partidos entre bloques de bytes.
+ * Aplica el límite durante la lectura para evitar acumular una entrada ilimitada en memoria.
+ */
 async function readTicketFromStdin(): Promise<string> {
   const decoder = new StringDecoder('utf8');
   let text = '';
@@ -38,7 +46,11 @@ async function readTicketFromStdin(): Promise<string> {
   return text;
 }
 
-/** Composition root: sólo este borde conoce argv, stdin, stdout y process.env. */
+/**
+ * Punto de composición (composition root): crea y conecta los componentes de la aplicación.
+ * Conoce argv/stdin/stdout/process.env y traduce el ciclo de la terminal a una llamada al servicio.
+ * El servicio recibe dependencias listas; no tiene que buscar claves ni interpretar comandos.
+ */
 async function main(): Promise<void> {
   let parsedArgs;
   try {
@@ -99,6 +111,8 @@ async function main(): Promise<void> {
   let sink: Awaited<ReturnType<typeof createEventSink>> | undefined;
   const rawOutputs: CapturedOutput[] = [];
   try {
+    // El sink recibe sólo eventos operativos; process().capture conserva texto para el reporte.
+    // Separar ambos destinos permite redirigir stderr sin mezclar contenido privado ni stdout.
     sink = await createEventSink(parsedArgs.values['telemetry-file']);
     const assistant = new SupportAssistant({
       provider: createProvider(settings),

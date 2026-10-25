@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/**
+ * Entrada de terminal para evaluar conjuntos de casos, separada de la CLI que atiende un ticket.
+ * Ofrece ejecuciones con API y operaciones offline sobre reportes/revisiones guardados. Decide el
+ * modo antes de importar el borde live para que leer o comparar archivos no requiera credenciales.
+ */
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { AppError, publicError } from './errors.js';
@@ -18,6 +23,11 @@ Cada corrida produce JSON validado, resumen Markdown y revisión JSONL pendiente
 Comparar reportes y resumir son operaciones offline sin credenciales ni clientes SDK.
 `;
 
+/**
+ * Valida subcomandos y conecta el evaluador o los lectores offline. argv explícito permite probar
+ * la interpretación de comandos. run/compare/adversarial ejecutan casos; summarize analiza archivos,
+ * y compare --reports compara evidencia ya guardada sin volver a llamar a los modelos.
+ */
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   let args;
   try {

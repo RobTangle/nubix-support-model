@@ -1,3 +1,9 @@
+/**
+ * Caso de uso de soporte: moderar la entrada, generar una propuesta y moderar su salida.
+ * Separa la decisión de qué publicar del transporte (CLI/HTTP) y de los detalles de cada SDK.
+ * Delega el ciclo de vida de cada ticket a service-run.ts y sus llamadas a execution.ts;
+ * mantener esas responsabilidades aparte permite probar y evaluar el mismo flujo desde otros bordes.
+ */
 import type { AssistantOptions, ProcessOptions } from './execution.js';
 import { loadPrompts } from './prompts.js';
 import { safeResponse, safetyAssessmentSchema, type SupportResponse } from './schemas.js';
@@ -13,7 +19,10 @@ export async function loadPrompt(): Promise<string> {
   return (await loadPrompts()).system;
 }
 
-/** Caso de uso independiente del transporte: CLI y una futura ruta HTTP lo comparten. */
+/**
+ * Coordina el trabajo de soporte con dependencias inyectadas. Una instancia puede atender varias
+ * consultas: conserva configuración compartida y crea el estado de cada corrida mediante runSession.
+ */
 export class SupportAssistant {
   private readonly options: AssistantOptions;
 
@@ -40,6 +49,8 @@ export class SupportAssistant {
    * Coordina seguridad y generación. Validar JSON no prueba corrección semántica:
    * la moderación evalúa entrada y propuesta, incluyendo actions, antes de publicar.
    * La traza contiene sólo metadatos; el estado por consulta vive en runSession.
+   * process devuelve respuesta + traza para reportes/evaluaciones; respond expone sólo la respuesta.
+   * Sólo allow continúa: review, block o rechazo del proveedor llevan a una derivación estática.
    */
   async process(input: unknown, process: ProcessOptions = {}): Promise<SupportRun> {
     return runSession(this.options, input, process, async (ticket, executor, context) => {

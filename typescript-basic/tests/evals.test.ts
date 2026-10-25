@@ -1,3 +1,7 @@
+/**
+ * Prueba el sistema de evaluaciones: corpus, métricas, reportes, revisión humana y comparación.
+ * Los modelos falsos comprueban el software del experimento; sus respuestas no acreditan calidad LLM.
+ */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';

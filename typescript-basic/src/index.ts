@@ -1,4 +1,8 @@
-// API del paquete: importar estos símbolos no lee claves ni inicia una consulta.
+/**
+ * Entrada pública de la biblioteca: reúne las clases, funciones y tipos pensados para sus consumidores.
+ * Permite integrar el asistente en otro programa sin importar las CLI ni ejecutar sus comandos.
+ * Importar estos símbolos no lee claves ni inicia una consulta; el llamador construye sus dependencias.
+ */
 export { SupportAssistant, loadPrompt } from './service.js';
 export { ticketSchema, supportResponseSchema } from './schemas.js';
 export type { Ticket, SupportResponse } from './schemas.js';

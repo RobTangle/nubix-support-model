@@ -1,4 +1,9 @@
-/** Puerto del servicio: describe lo que necesita, sin depender del SDK concreto. */
+/**
+ * Contrato neutral entre el ejecutor y los proveedores. Un "puerto" describe lo que necesita
+ * la aplicación; un adaptador de providers.ts lo implementa con OpenAI, xAI o Google.
+ * Así el caso de uso puede cambiar de SDK o usar un doble de prueba sin cambiar sus reglas.
+ */
+/** Una solicitud al modelo con instrucciones, contenido, contrato de salida y límite de tokens. */
 export interface CompletionRequest {
   readonly systemPrompt: string;
   readonly userContent: string;
@@ -8,6 +13,7 @@ export interface CompletionRequest {
   readonly maxOutputTokens: number;
 }
 
+/** Resultado normalizado del SDK. text todavía requiere JSON.parse y validación con Zod. */
 export interface CompletionResult {
   readonly text: string;
   readonly status: 'completed' | 'incomplete' | 'refused';
@@ -30,7 +36,7 @@ export interface LLMProvider {
    * Este contrato pertenece a la integración con el LLM: no conoce tickets ni
    * políticas de soporte. Cada adaptador traduce la solicitud a su SDK, propaga
    * la señal de cancelación y normaliza el resultado y los errores.
-   * El texto devuelto todavía debe validarse localmente en SupportAssistant.
+   * El texto devuelto todavía debe validarse localmente en StructuredExecutor.
    *
    * @param request Instrucciones, contenido de usuario, JSON Schema y señal de cancelación.
    * @returns Texto generado y estado normalizado: completado, incompleto o rechazado.

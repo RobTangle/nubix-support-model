@@ -1,3 +1,8 @@
+/**
+ * Configuración de conexión: decide proveedor, clave y modelo a partir de valores del entorno.
+ * Separa lectura de archivos de validación para probarla sin alterar process.env. Los límites de
+ * dinero/tiempo/tokens viven en runtime-settings.ts porque son políticas de ejecución del asistente.
+ */
 import { readFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
 import { z } from 'zod';
@@ -11,7 +16,11 @@ export const settingsSchema = z.strictObject({
 
 export type ProviderSettings = z.infer<typeof settingsSchema>;
 
-/** Función pura: recibe el entorno para poder probarla sin cambiar process.env global. */
+/**
+ * Selecciona sólo la clave del proveedor elegido, aplica el modelo predeterminado y valida datos.
+ * Una variable de modelo ausente usa el default; una definida pero vacía falla por configuración.
+ * Recibe el entorno explícitamente y no lo modifica ni inicia conexiones con los proveedores.
+ */
 export function readSettings(provider: string, env: NodeJS.ProcessEnv): ProviderSettings {
   if (provider !== 'openai' && provider !== 'xai' && provider !== 'google-ai')
     throw new AppError('invalid_provider');
@@ -35,7 +44,11 @@ export function readSettings(provider: string, env: NodeJS.ProcessEnv): Provider
   return result.data;
 }
 
-/** Bootstrap solamente: el servicio no vuelve a leer archivos en cada ticket. */
+/**
+ * Preparación inicial (bootstrap): combina el .env de la raíz con el entorno recibido, que tiene
+ * prioridad. El .env predeterminado puede faltar; una ruta explícita inexistente es un error.
+ * Se llama al iniciar el comando, antes de crear el asistente, para evitar I/O por cada etapa.
+ */
 export async function readEnvironment(
   path?: string,
   env: NodeJS.ProcessEnv = process.env,

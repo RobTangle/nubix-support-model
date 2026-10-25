@@ -1,3 +1,4 @@
+/** Comprueba que el build distribuya los mismos precios y datasets que los recursos canónicos Python. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';

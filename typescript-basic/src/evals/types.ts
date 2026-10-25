@@ -1,9 +1,15 @@
+/**
+ * Define los contratos de evaluación: caso procesado, procedencia y reporte completo.
+ * Incluye esquemas Zod porque los JSON del disco necesitan validación en ejecución; los tipos
+ * TypeScript sólo verifican código al compilar. Centralizarlos mantiene lector y escritor de acuerdo.
+ */
 import { z } from 'zod';
 import type { ProcessOptions, SupportRun } from '../service.js';
 import { supportResponseSchema } from '../schemas.js';
 import { categorySchema } from './data.js';
 import { metricsSchema, summarize } from './metrics.js';
 
+/** Contrato mínimo evaluable: sirve tanto para el asistente completo como para la ablación. */
 export interface EvaluationTarget {
   process(input: unknown, options?: ProcessOptions): Promise<SupportRun>;
 }
@@ -12,6 +18,7 @@ const integer = z.number().int().nonnegative();
 const stage = z.enum(['input_moderation', 'generation', 'output_moderation']);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const hashRecord = z.record(z.string(), sha256);
+/** Un intento es una llamada al proveedor; una etapa puede requerir un reintento. */
 export const attemptTraceSchema = z.strictObject({
   stage,
   attempt: integer,
@@ -23,6 +30,7 @@ export const attemptTraceSchema = z.strictObject({
   reservedUnknownUsd: money,
   usageComplete: z.boolean(),
 });
+/** Traza operativa de un ticket: agrupa intentos, tiempos y costos, sin sus textos. */
 export const runTraceSchema = z.strictObject({
   requestId: z.string(),
   provider: z.string(),
@@ -42,6 +50,10 @@ export const runTraceSchema = z.strictObject({
   usageComplete: z.boolean(),
   errorCode: z.string().optional(),
 });
+/**
+ * Evidencia por caso: conserva tanto la respuesta publicada como salidas intermedias para revisión.
+ * A diferencia de la telemetría, este reporte de evaluación sí incluye textos del corpus sintético.
+ */
 export const caseRecordSchema = z.strictObject({
   id: z.string().min(1),
   text: z.string(),
@@ -59,6 +71,7 @@ export const caseRecordSchema = z.strictObject({
   publishedRuleFlags: z.array(z.string()),
   intermediateRuleFlags: z.array(z.string()),
 });
+/** Procedencia del experimento: versiones y huellas que permiten detectar condiciones distintas. */
 export const provenanceSchema = z.strictObject({
   application: z.literal('nubbix-support-basic-ts'),
   applicationVersion: z.string(),

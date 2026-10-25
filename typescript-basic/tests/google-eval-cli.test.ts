@@ -1,3 +1,4 @@
+/** Prueba los comandos de evaluación con Google, su procedencia y presupuestos mediante HTTP simulado. */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';

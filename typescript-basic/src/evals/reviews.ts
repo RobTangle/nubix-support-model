@@ -1,3 +1,8 @@
+/**
+ * Une las métricas automáticas con el juicio humano sobre utilidad, exactitud y seguridad.
+ * Esta política de aceptación vive aparte del runner: ejecutar casos no equivale a aprobar
+ * un prompt, y detectar un patrón de texto no reemplaza interpretar la respuesta.
+ */
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Decimal } from 'decimal.js';
@@ -7,6 +12,7 @@ import { categories } from './data.js';
 import { summarize } from './metrics.js';
 import type { EvaluationReport } from './types.js';
 
+// null indica una revisión pendiente; 0 y 1 expresan el juicio negativo o positivo del evaluador.
 const score = z.union([z.literal(0), z.literal(1)]).nullable();
 export const humanReviewSchema = z.strictObject({
   runId: z.uuid(),
@@ -21,6 +27,10 @@ export const humanReviewSchema = z.strictObject({
 });
 export type HumanReview = z.infer<typeof humanReviewSchema>;
 
+/**
+ * Vincula cada revisión a un caso existente y rechaza duplicados o campos que no aplican.
+ * Exige notas cuando el juicio humano contradice ciertos indicios automáticos para dejar contexto.
+ */
 export function validateReviews(reports: EvaluationReport[], input: unknown[]): HumanReview[] {
   try {
     const reviews = input.map((value) => humanReviewSchema.parse(value));
@@ -51,6 +61,7 @@ export function validateReviews(reports: EvaluationReport[], input: unknown[]): 
   }
 }
 
+/** Lee archivos JSONL de anotaciones humanas y valida su relación con los reportes recibidos. */
 export async function loadReviews(
   paths: string[],
   reports: EvaluationReport[],
@@ -71,6 +82,7 @@ export async function loadReviews(
   }
 }
 
+/** Reúne los JSONL de una carpeta en orden estable y los valida como un único conjunto. */
 export async function loadReviewDirectory(
   directory: string,
   reports: EvaluationReport[],
@@ -82,6 +94,10 @@ export async function loadReviewDirectory(
   );
 }
 
+/**
+ * Aplica los umbrales de aceptación (gates) y cuenta revisiones pendientes o problemas severos.
+ * Ser elegible requiere evidencia real, corrida completa y calidad humana; un fake prueba código.
+ */
 export function assessReport(report: EvaluationReport, reviews: HumanReview[]) {
   const matching = new Map(
     reviews
@@ -160,6 +176,12 @@ export function assessReport(report: EvaluationReport, reviews: HumanReview[]) {
   };
 }
 
+/**
+ * Define qué debe mantenerse igual al comparar basic-v1 con basic-v2: modelo, corpus, manual,
+ * moderación, contratos, precios y configuración. Así evitamos atribuir al prompt un cambio
+ * causado por otra condición. Se excluyen promptVersion y el hash de system deliberadamente:
+ * la generación es la variable que cambia en esta comparación; las demás huellas deben coincidir.
+ */
 function comparisonContext(report: EvaluationReport): string {
   const context = report.provenance;
   return JSON.stringify([
@@ -186,7 +208,11 @@ function comparisonContext(report: EvaluationReport): string {
   ]);
 }
 
-/** Recomendamos con desarrollo; nunca mutamos configuración ni promovemos un mock. */
+/**
+ * Compara v1/v2 en desarrollo bajo las mismas condiciones y recomienda entre las elegibles:
+ * primero macro F1, luego costo y latencia; ante empate conserva v1. Aún exige validar en test.
+ * Recomendamos con desarrollo; nunca mutamos configuración ni promovemos un mock.
+ */
 export function compareReports(reports: EvaluationReport[], inputReviews: unknown[]) {
   const reviews = validateReviews(reports, inputReviews);
   if (

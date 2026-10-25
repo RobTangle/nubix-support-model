@@ -1,3 +1,4 @@
+/** Prueba selección de proveedor/modelo, claves propias y precedencia del entorno usando valores falsos. */
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

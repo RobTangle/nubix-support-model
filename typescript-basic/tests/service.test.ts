@@ -1,3 +1,4 @@
+/** Prueba el caso de uso sin red: prompts, rechazos, entrada inválida y aislamiento de consultas concurrentes. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';

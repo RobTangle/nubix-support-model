@@ -1,3 +1,9 @@
+/**
+ * Mecánica de cada llamada al LLM: arma el request, reserva dinero, aplica timeout, valida JSON
+ * y controla los reintentos. service.ts decide el orden de etapas; este módulo aplica las mismas
+ * reglas a generación y moderación, usando el contrato neutral de provider-types.ts.
+ * La separación evita que cada etapa o proveedor implemente su propia política de ejecución.
+ */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
 import { Budget, type PriceCatalog } from './budget.js';
@@ -8,6 +14,7 @@ import type { RuntimeSettings } from './runtime-settings.js';
 import type { CapturedOutput, EventSink, RunTrace, Stage, AttemptTrace } from './telemetry.js';
 import { emitWithinDeadline } from './telemetry.js';
 
+/** Dependencias compartibles: cliente, prompts, precios y políticas generales del asistente. */
 export interface AssistantOptions {
   provider: LLMProvider;
   providerName: string;
@@ -17,12 +24,14 @@ export interface AssistantOptions {
   settings?: Partial<RuntimeSettings>;
   emit?: EventSink;
 }
+/** Opciones de una corrida concreta; un presupuesto de lote puede abarcar varios tickets de evals. */
 export interface ProcessOptions {
   signal?: AbortSignal;
   batchBudget?: Budget;
   /** Captura explícita para evaluaciones y reportes de testing; no forma parte de la telemetría. */
   capture?: (output: CapturedOutput) => void;
 }
+/** Estado de un ticket compartido por sus etapas: deadline es un instante del reloj monotónico. */
 export interface ExecutionContext {
   trace: RunTrace;
   deadline: number;
@@ -32,10 +41,19 @@ export interface ExecutionContext {
   capture?: (output: CapturedOutput) => void;
 }
 
-/** Un único algoritmo de llamadas para moderación y generación: evita políticas divergentes. */
+/**
+ * "Structured" indica que la salida debe cumplir un esquema, además de ser JSON válido.
+ * Executor coordina la llamada; el adaptador provider es quien se comunica con el SDK concreto.
+ */
 export class StructuredExecutor {
   constructor(private readonly options: AssistantOptions) {}
 
+  /**
+   * Ejecuta una etapa y devuelve su dato validado como T, o null ante rechazo explícito.
+   * Hay hasta dos intentos totales: un fallo transitorio puede reintentarse con espera breve;
+   * JSON inválido puede repararse agregando instrucciones, sin reenviar la salida cruda.
+   * Ambas causas comparten el mismo límite para evitar multiplicar llamadas y costos.
+   */
   async call<T>(
     stage: Stage,
     system: string,
@@ -82,6 +100,8 @@ export class StructuredExecutor {
         signal.throwIfAborted();
         const result = await this.options.provider.complete({ ...request, signal });
         usage = result.usage;
+        // Capturar antes de validar conserva también JSON inválido o texto truncado para debugging.
+        // Este canal contiene texto del modelo y es independiente de los eventos de metadatos.
         if (context.capture) context.capture({ stage, attempt, text: result.text });
         signal.throwIfAborted();
         if (result.status === 'refused') {
@@ -107,10 +127,15 @@ export class StructuredExecutor {
         usage = failure.usage ?? usage;
         status = failure.code;
       } finally {
+        // Haber recibido tokens no alcanza: el costo conocido requiere un desglose que permita
+        // aplicar las tarifas (incluida caché). Sin él, se conserva la reserva estimada del intento;
+        // desconocido no se transforma en costo cero ni libera presupuesto para más llamadas.
         const cost = usage ? price.cost(usage) : null;
         const knownCost = cost?.complete ? cost.usd : null;
         for (const reservation of reservations)
           reservation.budget.settle(reservation.id, knownCost);
+        // Se registra todo intento, incluso si fallaron el proveedor o la validación. valid sólo
+        // expresa el contrato estructural; la calidad de la respuesta requiere otra evaluación.
         const item: AttemptTrace = {
           stage,
           attempt,
@@ -125,6 +150,8 @@ export class StructuredExecutor {
         context.trace.attempts.push(item);
         context.trace.usageComplete &&= item.usageComplete;
         if (this.options.emit) {
+          // El payload se construye con campos explícitos para excluir prompts, respuestas y claves.
+          // Esperar el sink permite propagar sus fallos y contabilizar su espera en el plazo total.
           await emitWithinDeadline(
             this.options.emit,
             {

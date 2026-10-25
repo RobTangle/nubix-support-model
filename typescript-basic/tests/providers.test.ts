@@ -1,3 +1,7 @@
+/**
+ * Prueba los adaptadores OpenAI/xAI con sus SDK reales y transporte HTTP simulado. Verifica que
+ * respeten el contrato común y no introduzcan reintentos, exposición de secretos o consumo inventado.
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync, spawnSync } from 'node:child_process';

@@ -1,3 +1,8 @@
+/**
+ * Errores propios de la aplicación: códigos estables para control de flujo y mensajes públicos.
+ * El borde de cada SDK traduce sus errores a AppError para evitar filtrar mensajes, claves o
+ * contenido del ticket. El ejecutor usa retryable y usage para decidir reintentos y costos.
+ */
 import type { TokenUsage } from './provider-types.js';
 import type { RunTrace } from './telemetry.js';
 
@@ -79,6 +84,7 @@ export class AppError extends Error {
   }
 }
 
+/** Expone sólo código/mensaje; un error desconocido se vuelve internal_error sin revelar su detalle. */
 export function publicError(error: unknown): { error: { code: ErrorCode; message: string } } {
   const safe = error instanceof AppError ? error : new AppError('internal_error');
   return { error: { code: safe.code, message: safe.message } };

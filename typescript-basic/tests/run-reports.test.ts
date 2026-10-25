@@ -1,3 +1,4 @@
+/** Prueba el escritor JSON en disco temporal: reservas, snapshots y corridas concurrentes independientes. */
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

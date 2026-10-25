@@ -1,3 +1,9 @@
+/**
+ * Adaptadores de SDK: traducen el contrato LLMProvider a requests y respuestas de cada proveedor.
+ * Encapsulan autenticación, formato específico, estados, errores y uso de tokens. El ejecutor puede
+ * así aplicar una sola política de validación/reintentos; aquí se desactivan los reintentos del SDK.
+ * Cada instancia conserva cliente y modelo, mientras los datos de cada ticket llegan en complete().
+ */
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import {
@@ -93,11 +99,16 @@ function googleProviderError(
   return new AppError('provider_error', { usage });
 }
 
+/** Descarta conteos negativos, fraccionarios o inseguros antes de usarlos para presupuestar dinero. */
 function validTokenCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
-/** Conserva totales válidos; un subconjunto ausente o incoherente queda desconocido. */
+/**
+ * Traduce los distintos nombres/desgloses de uso al contrato común de contabilidad.
+ * Google informa razonamiento por separado y aquí se suma a salida para calcular su costo.
+ * Conserva totales válidos; un desglose ausente o incoherente queda desconocido, sin fingir ceros.
+ */
 function tokenUsage(raw: unknown, provider: 'openai' | 'xai' | 'google-ai'): TokenUsage | null {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
   const wire = raw as Record<string, unknown>;
@@ -163,6 +174,7 @@ function completion(
   return { text, status: status === 'completed' ? 'completed' : 'incomplete', usage };
 }
 
+/** Traduce el puerto común a Responses de OpenAI y conserva un cliente reutilizable por instancia. */
 class OpenAIProvider implements LLMProvider {
   private readonly client: OpenAI;
   constructor(
@@ -225,6 +237,7 @@ class OpenAIProvider implements LLMProvider {
   }
 }
 
+/** Adapta Responses de xAI: normaliza su SDK aunque sus tipos y errores difieran de los de OpenAI. */
 class XAIProvider implements LLMProvider {
   private readonly client: SpaceXAI;
   constructor(
@@ -286,6 +299,7 @@ class XAIProvider implements LLMProvider {
   }
 }
 
+/** Adaptador de Interactions de Google: convierte sus estados y métricas al mismo contrato local. */
 export class GoogleGenAIProvider implements LLMProvider {
   private readonly client: GoogleGenAI;
   private readonly model: string;
@@ -293,6 +307,11 @@ export class GoogleGenAIProvider implements LLMProvider {
     this.client = new GoogleGenAI({ apiKey, httpOptions: { timeout: 15_000, ...options } });
     this.model = model;
   }
+  /**
+   * Envía una interacción sin estado remoto persistido y normaliza texto, bloqueos y consumo.
+   * El modelo guardado en la instancia se pasa en cada request; el texto devuelto aún debe
+   * validarse en StructuredExecutor. Los bloqueos de Google también pueden llegar como errores HTTP.
+   */
   async complete(request: CompletionRequest): Promise<CompletionResult> {
     let usage: TokenUsage | null = null;
     try {
@@ -331,7 +350,10 @@ export class GoogleGenAIProvider implements LLMProvider {
   }
 }
 
-/** Factory de composición: sólo construye el cliente elegido y permite inyectar fetch en tests. */
+/**
+ * Factory: construye el adaptador elegido explícitamente por configuración. Centraliza esa selección
+ * para que CLI y evals no dependan de constructores SDK; fetch inyectable permite probar sin red.
+ */
 export function createProvider(
   settings: ProviderSettings,
   options: ProviderOptions = {},

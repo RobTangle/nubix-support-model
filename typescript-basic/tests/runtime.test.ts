@@ -1,3 +1,7 @@
+/**
+ * Prueba políticas de ejecución bajo fallos: plazos, sinks bloqueados, reintentos y reservas.
+ * Complementa al flujo normal para detectar operaciones colgadas o respuestas publicadas sin control.
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';

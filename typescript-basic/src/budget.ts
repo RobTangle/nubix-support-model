@@ -1,3 +1,9 @@
+/**
+ * Control monetario local: PriceCatalog obtiene tarifas, Price estima/calcula una llamada y
+ * Budget limita el dinero comprometido. Mantenerlo separado de los SDK permite aplicar el mismo
+ * presupuesto a cualquier proveedor y compartir un límite entre varias corridas de evaluación.
+ * Son controles y cálculos de la aplicación; la factura definitiva pertenece al proveedor.
+ */
 import { createHash, randomUUID } from 'node:crypto';
 import { Decimal } from 'decimal.js';
 import { parse } from 'yaml';
@@ -24,7 +30,11 @@ const catalogSchema = z.strictObject({
   models: z.record(z.string(), rateSchema),
 });
 
-/** Dinero decimal, no number binario: permite sumar costos pequeños sin redondeos acumulados. */
+/**
+ * Libro de presupuesto: reserva una estimación antes de llamar y la concilia con consumo conocido.
+ * Una llamada de costo desconocido conserva su reserva para evitar asumir que fue gratis.
+ * Usa dinero decimal para no acumular redondeos binarios al sumar importes pequeños.
+ */
 export class Budget {
   private known = new Decimal(0);
   private readonly reservations = new Map<string, Decimal>();
@@ -46,16 +56,19 @@ export class Budget {
   get unknownUsd(): string {
     return Decimal.sum(0, ...this.reservations.values()).toFixed();
   }
+  /** Comprometido = costo conocido + reservas pendientes/desconocidas; es lo que limita el gasto. */
   get committedUsd(): string {
     return this.known.plus(this.unknownUsd).toFixed();
   }
 
+  /** Comprueba un importe adicional sin reservarlo; check('0') revisa el total ya comprometido. */
   check(amount: string): void {
     const value = new Decimal(amount);
     if (!value.isFinite() || value.isNegative()) throw new AppError('configuration_error');
     if (new Decimal(this.committedUsd).plus(value).gt(this.limit)) throw new AppError(this.code);
   }
 
+  /** Compromete una estimación y devuelve el ID que settle usará para cerrar ese intento. */
   reserve(amount: string): string {
     this.check(amount);
     const id = randomUUID();
@@ -64,6 +77,7 @@ export class Budget {
     return id;
   }
 
+  /** Cierra una reserva una sola vez: sustituye por costo conocido o mantiene el monto si falta uso. */
   settle(id: string, actualUsd: string | null): void {
     if (!this.pending.delete(id)) throw new AppError('internal_error');
     if (actualUsd !== null) {
@@ -74,9 +88,11 @@ export class Budget {
   }
 }
 
+/** Aplica las tarifas de un modelo; mantiene separado el cálculo del seguimiento del presupuesto. */
 export class Price {
   constructor(private readonly rates: z.infer<typeof rateSchema>) {}
 
+  /** Calcula USD a partir del uso reportado; complete indica si también conoce el desglose de caché. */
   cost(usage: TokenUsage): { usd: string; complete: boolean } {
     const cached = usage.cachedInputTokens;
     const written = usage.cacheWriteInputTokens;
@@ -101,6 +117,7 @@ export class Price {
     };
   }
 
+  /** Estimación previa para reservar presupuesto; no necesita llamar al proveedor para calcularla. */
   estimate(request: Omit<CompletionRequest, 'signal'>): string {
     // Bytes UTF-8 + margen: cota local conservadora, no un tokenizer ni garantía de factura.
     const inputTokens = Buffer.byteLength(JSON.stringify(request), 'utf8') + 1024;
@@ -117,8 +134,10 @@ export class Price {
   }
 }
 
+/** Instantánea validada del YAML de tarifas, consultada por combinación de proveedor y modelo. */
 export class PriceCatalog {
   readonly version: string;
+  /** Huella del YAML exacto; detecta cambios de tarifas o formato aunque version no se actualice. */
   readonly hash: string;
   private readonly data: z.infer<typeof catalogSchema>;
 
@@ -129,9 +148,12 @@ export class PriceCatalog {
       throw new AppError('configuration_error');
     }
     this.version = this.data.version;
+    // Identifica la instantánea usada para calcular costos; no verifica su vigencia con el proveedor.
+    // source se conserva para que el reporte pueda archivar el mismo contenido que produjo este hash.
     this.hash = createHash('sha256').update(source).digest('hex');
   }
 
+  /** Falla si falta una tarifa: evita iniciar llamadas cuyo costo local no sabemos presupuestar. */
   get(provider: string, model: string): Price {
     const rate = this.data.models[`${provider}:${model}`];
     if (!rate) throw new AppError('unknown_model');
@@ -139,6 +161,7 @@ export class PriceCatalog {
   }
 }
 
+/** Lee el catálogo distribuido con la app; no consulta ni actualiza tarifas automáticamente por red. */
 export async function loadPrices(): Promise<PriceCatalog> {
   try {
     return new PriceCatalog(await readSharedResource('prices.yaml'));

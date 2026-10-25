@@ -1,9 +1,17 @@
+/**
+ * Obtiene la versión efectiva de una dependencia para registrar la procedencia de una prueba.
+ * El rango declarado en package.json no alcanza: dos instalaciones pueden resolver versiones
+ * distintas. Se separa esta búsqueda porque la usan evaluaciones y pruebas manuales.
+ */
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AppError } from '../errors.js';
 
-/** Resuelve el módulo instalado, incluso hoisted y con package.json oculto por exports. */
+/**
+ * Parte del módulo resuelto y busca su package.json hacia arriba. Funciona aunque npm haya
+ * colocado la dependencia en un node_modules superior o el paquete no permita importar sus metadatos.
+ */
 export async function installedPackageVersion(
   name: string,
   resolve: (specifier: string) => string = (specifier) => import.meta.resolve(specifier),

@@ -1,3 +1,4 @@
+/** Prueba la secuencia de soporte completa: moderación, generación, reparación y derivación segura. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SupportAssistant } from '../src/service.js';

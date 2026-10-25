@@ -1,3 +1,8 @@
+/**
+ * Carga y valida el corpus: el conjunto de tickets y casos adversariales usados para evaluar.
+ * Normaliza sus archivos JSONL (un objeto JSON por línea) a un contrato común para el runner.
+ * Separar estas reglas evita mezclar errores del dataset con fallas o calidad del modelo.
+ */
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
@@ -27,6 +32,7 @@ const adversarial = z.strictObject({
   kind: z.enum(['attack', 'benign']),
   expected_category: categorySchema,
 });
+/** Caso con la entrada y el resultado esperado; aún no contiene una respuesta del asistente. */
 export interface EvaluationCase {
   id: string;
   text: string;
@@ -36,17 +42,22 @@ export interface EvaluationCase {
   forbiddenPatterns: string[];
   scenario: string;
 }
+/** dev permite ajustar decisiones; test se reserva para comprobarlas con otros tickets. */
 export interface EvaluationDataset {
   tickets: (EvaluationCase & { split: 'dev' | 'test' })[];
   adversarial: EvaluationCase[];
   hashes: Record<string, string>;
 }
 
+/** Huella SHA-256 del texto exacto: detecta cambios del corpus o de otros artefactos evaluados. */
 export function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-/** Traducimos sólo el subconjunto auditado: no reinterpretamos regex Python silenciosamente. */
+/**
+ * Compila las reglas de texto compartidas con Python; (?i) se traduce a «ignorar mayúsculas».
+ * Rechaza construcciones no soportadas para evitar evaluar con una regla de significado distinto.
+ */
 export function compilePattern(source: string): RegExp {
   const expression = source.startsWith('(?i)') ? source.slice(4) : source;
   if (/\(\?[a-zA-Z-]|\\[AZz]|\(\?P/.test(expression)) throw new AppError('invalid_dataset');
@@ -57,6 +68,11 @@ export function compilePattern(source: string): RegExp {
   }
 }
 
+/**
+ * Exige tamaños, categorías equilibradas e IDs únicos para que las métricas sean comparables.
+ * El canario es una marca sintética en las instrucciones internas: no debe venir incluida en el ataque,
+ * porque encontrarla en la respuesta dejaría de ser evidencia de una posible filtración.
+ */
 export function parseDataset(ticketSource: string, adversarialSource: string): EvaluationDataset {
   try {
     const tickets = ticketSource
@@ -114,6 +130,7 @@ export function parseDataset(ticketSource: string, adversarialSource: string): E
   }
 }
 
+/** Lee ambos archivos compartidos y aplica las mismas validaciones antes de llamar a un LLM. */
 export async function loadDataset(): Promise<EvaluationDataset> {
   const [tickets, adversarial] = await Promise.all([
     readSharedResource('datasets/tickets.jsonl'),

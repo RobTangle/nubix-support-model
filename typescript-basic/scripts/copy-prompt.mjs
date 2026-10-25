@@ -1,3 +1,8 @@
+/**
+ * Preparación de recursos para dev/build: copia YAML, tarifas y datasets junto al JS compilado.
+ * tsc sólo transforma código; este paso permite ejecutar el paquete desde cualquier directorio
+ * y reutilizar los datos canónicos de Python sin ejecutar esa implementación.
+ */
 import { copyFile, cp, mkdir } from 'node:fs/promises';
 
 // tsc compila TypeScript, pero no copia YAML. El recurso debe viajar con dist/.

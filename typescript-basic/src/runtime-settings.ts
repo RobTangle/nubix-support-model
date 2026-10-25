@@ -1,3 +1,8 @@
+/**
+ * Políticas de ejecución: plazos, tokens máximos y presupuestos, con límites y defaults validados.
+ * Separarlas de config.ts permite usar el mismo cliente con distintas políticas en pruebas/evals.
+ * Los importes se representan como texto decimal; las duraciones se expresan en milisegundos.
+ */
 import { z } from 'zod';
 import { AppError } from './errors.js';
 
@@ -15,6 +20,10 @@ export const runtimeSettingsSchema = z.strictObject({
 });
 export type RuntimeSettings = z.infer<typeof runtimeSettingsSchema>;
 
+/**
+ * Lee los dos presupuestos configurables por entorno y completa los demás defaults con Zod.
+ * Tiempos y tokens pueden ajustarse programáticamente mediante las opciones del asistente.
+ */
 export function readRuntimeSettings(env: NodeJS.ProcessEnv): RuntimeSettings {
   const result = runtimeSettingsSchema.safeParse({
     ticketBudgetUsd: env.NUBBIX_TICKET_BUDGET_USD ?? '0.05',

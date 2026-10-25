@@ -1,3 +1,7 @@
+/**
+ * Prueba el borde de terminal en procesos separados: canales de salida, recursos, cancelación
+ * y reportes. Usa HTTP simulado y carpetas temporales para no gastar API ni contaminar pruebas reales.
+ */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {

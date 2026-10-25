@@ -1,3 +1,7 @@
+/**
+ * Ejecuta el SDK real de Google contra respuestas HTTP falsas: comprueba traducción del request,
+ * texto/estados, tokens de razonamiento, bloqueos, cancelación y errores sin usar la API real.
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
