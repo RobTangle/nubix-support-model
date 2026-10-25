@@ -43,21 +43,23 @@ La CLI directa publica sólo la respuesta de cuatro campos en stdout. Los evento
 ## Panel en vivo: Nubbix Flow Lab
 
 ```powershell
-# Modo DEMO predeterminado: no lee claves ni llama a APIs de modelos.
+# Modo LIVE predeterminado: lee las claves actuales del servidor.
 npm run web
 ```
 
 Abrí **http://127.0.0.1:3000**. Elegí un ticket, proveedor y versión de prompt, y ejecutalo. Los eventos aparecen mientras el backend procesa la consulta, con actor **LLM / CÓDIGO**, timestamp UTC, tiempo desde inicio, diferencia con el evento anterior, duración cuando corresponde y detalles desplegables. La animación de una request se mantiene hasta recibir su finalización o fallo. No se simula un porcentaje de progreso.
 
-El modo demo recorre el mismo `SupportAssistant` con un proveedor de prueba que demora cada llamada. Los conteos y costos son simulados, identificados como tales: no prueban calidad ni latencia del proveedor real. El ejemplo **Bloqueo demo** envía `DEMO_BLOCK` y permite ver cómo la primera moderación corta las llamadas restantes.
+El servidor arranca en **LIVE** y enviar un ticket o iniciar una evaluación consume APIs reales. Abrir la página, consultar historial y revisar resultados no consume tokens. No cambia a demo automáticamente si falta una clave: el proveedor aparece deshabilitado, o falla el inicio si no hay ninguno disponible.
 
 ```powershell
-# Modo LIVE: usa únicamente claves configuradas en el servidor y consume saldo real.
-npm run web:live
+# Modo DEMO explícito para estudiar la interfaz sin gastar saldo.
+npm run web:demo
 
 # Después del build: elegir puerto, archivo de entorno o destino de logs.
 node dist/web/server.js --port 3001 --live --env-file ../.env --telemetry-file reports/web-events.jsonl
 ```
+
+El modo demo recorre `SupportAssistant` con un doble de proveedor. Sus tokens y costos son simulados; no acreditan calidad ni latencia real. **Bloqueo demo** usa `DEMO_BLOCK` únicamente con ese doble. `npm run web:live` sigue disponible como alias explícito del modo real.
 
 Para inspeccionar los mismos eventos finos desde la CLI, agregá `--flow-events`. El JSON público de stdout conserva sus cuatro campos; los eventos van a stderr y al archivo opcional:
 
@@ -65,9 +67,15 @@ Para inspeccionar los mismos eventos finos desde la CLI, agregá `--flow-events`
 node dist/cli.js --provider google-ai --text "Necesito una factura" --flow-events --telemetry-file reports/flow.jsonl
 ```
 
-El panel sirve como herramienta local de aprendizaje. Se vincula sólo a loopback, valida Host/Origin y limita el cuerpo HTTP a 128 KiB y el ticket a 8000 puntos Unicode. Admite cuatro ejecuciones simultáneas por proceso; si está ocupado responde 429. Cancelar o cerrar la conexión propaga la señal al servicio. No tiene autenticación multiusuario, historial persistente ni recuperación de una ejecución tras recargar; no está diseñado para exponerse directamente en Internet.
+El panel sirve como herramienta local de aprendizaje. Se vincula sólo a loopback, valida Host/Origin y limita el cuerpo HTTP a 128 KiB y el ticket a 8000 puntos Unicode. Admite cuatro tickets simultáneos y una evaluación activa por proceso; si está ocupado responde 429. Cancelar o cerrar el stream de un ticket propaga la señal al servicio. Las evaluaciones continúan al cerrar la pestaña: tienen cancelación explícita. No tiene autenticación multiusuario ni está diseñado para exponerse directamente en Internet.
 
-Los eventos incluyen sólo metadatos. **No se envían claves, prompts ni propuestas sin moderar al navegador.** La respuesta se entrega en un frame terminal después del flujo de seguridad. A diferencia de la CLI, el panel no crea automáticamente los archivos de pruebas manuales con contenido; podés guardar la telemetría con `--telemetry-file`.
+El **historial** conserva entradas, eventos, inspecciones y resultados en SQLite local (`typescript-basic/data/lab.sqlite`, configurable con `--database`). Reabrir una ejecución restaura el flujo sin llamar al proveedor. Un cierre controlado o la detección de un proceso anterior muerto identifica corridas interrumpidas; no se reanudan automáticamente ni se inventa consumo desconocido.
+
+El **inspector de datos** muestra body original, ticket normalizado, esquemas/reglas Zod, requests neutrales al SDK, prompts, outputs de moderación y propuestas intermedias. Es un canal de depuración separado de los eventos/logs, que siguen conteniendo sólo metadatos. Puede mostrar contenido sin moderar, identificado como tal; la respuesta publicada sigue pasando por el flujo completo. No captura claves del servidor, headers de autenticación, entorno ni objetos SDK. La base contiene texto en claro y queda excluida de Git: usá tickets ficticios para aprender y protegé el acceso al archivo.
+
+En **Evaluaciones**, elegí proveedor y operación: `run` (60 casos), `compare` (120, dos prompts intercalados) o `adversarial` (20; 40 si comparás moderación). Usan el mismo `EvalRunner` que la CLI, checkpoints, presupuesto compartido y gates. Podés ver métricas, respuestas y salidas intermedias, abrir el flujo de cada caso y guardar la revisión humana. Los juicios pendientes impiden aprobar o recomendar un prompt. No se añadió un LLM juez. También quedan archivos compatibles con la CLI en `typescript-basic/reports/lab-evals/`; las revisiones editadas en UI se guardan en SQLite.
+
+**¿Qué es `reservation`?** Antes de cada llamada, el presupuesto compromete una estimación conservadora de tokens de entrada y salida máxima. Cuando llega el consumo, lo concilia y libera el excedente. Si una llamada falla sin informar uso, mantiene una reserva desconocida para no asumir costo cero. Es contabilidad local, no una retención o cobro del proveedor; el límite no garantiza la factura final.
 
 Leé el [recorrido de observabilidad y HTTP](../docs/live-observability.md) para entender las clases, los contratos y los límites de esta primera versión.
 
@@ -199,7 +207,9 @@ src/
   cli.ts             Entrada por terminal; composition root
   eval-cli.ts        Comandos live y offline de evaluación
   evals/             Dataset, métricas, revisión, comparación y reportes
-  web/               Express, contratos HTTP, modo demo y frontend TypeScript
+  inspection/        Canal explícito de depuración, separado de logs de metadatos
+  lab/               SQLite, historial, trabajos de evaluación y revisiones
+  web/               Express, contratos HTTP y frontend TypeScript
   index.ts           API importable sin ejecutar la CLI
 tests/               Contratos, políticas, SDK simulados, CLI, evals y concurrencia
 ```

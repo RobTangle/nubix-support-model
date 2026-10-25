@@ -11,11 +11,11 @@ npm ci
 npm run web
 ```
 
-Abrí http://127.0.0.1:3000. El modo inicial es **DEMO**: no lee claves y no hace llamadas a modelos externos. El proveedor simulado ejecuta el contrato del servicio y espera brevemente para que puedas observar la secuencia. Sus tokens y costos son sintéticos.
+Abrí http://127.0.0.1:3000. El modo inicial es **LIVE**: usa las claves actuales del servidor y consume APIs al enviar tickets o iniciar evaluaciones. Consultar la página o el historial no llama al modelo. `npm run web:demo` habilita explícitamente un doble sin conexiones externas, cuyos tokens y costos son sintéticos. El modo no cambia automáticamente ante errores de credenciales.
 
 Los ejemplos cubren facturación, técnico, cuenta, otros y el bloqueo `DEMO_BLOCK`. En un ticket normal verás tres llamadas al puerto del proveedor; ante bloqueo de entrada, una sola. Los reintentos sólo se muestran si realmente ocurren; el ejemplo demo normal no los provoca artificialmente.
 
-Para ejecutar llamadas reales, configurá las claves en el `.env` de la raíz y arrancá explícitamente:
+Las claves se leen del `.env` de la raíz; `web:live` se conserva como alias explícito:
 
 ```powershell
 npm run web:live
@@ -50,7 +50,12 @@ flowchart TD
   LLM & LOCAL --> OBS["CÓDIGO / RunObserver: eventos de metadatos"]
   OBS --> LOG["stderr y archivo JSONL opcional"]
   OBS --> STREAM["Frames event sobre HTTP JSONL"]
+  RUN --> INSPECT["CÓDIGO / RunInspection: contenido explícito de depuración"]
+  INSPECT --> DATA["Frames inspection: datos potencialmente sin moderar"]
+  OBS & INSPECT --> DB["CÓDIGO / LabStore: SQLite local"]
+  DB --> HISTORY["GET historial: lectura sin LLM"]
   STREAM --> VIEW["Frontend: validar y dibujar eventos recibidos"]
+  DATA & HISTORY --> VIEW
   RUN --> RESULT["Frame result: respuesta tras seguridad y traza"]
   RESULT --> VIEW
   VIEW --> HUMAN["HUMANO: inspeccionar detalles y estudiar el resultado"]
@@ -66,6 +71,10 @@ Los actores azules del panel representan operaciones al proveedor; en demo ese p
 | `StructuredExecutor` | Mantiene intentos, presupuestos y plazos. Delega instrumentación en colaboradores pequeños. |
 | `RunObserver` | Añade identidad, secuencia y relojes; valida metadatos y entrega eventos al sink inyectado. Una instancia por corrida evita mezclar solicitudes. |
 | `AttemptObserver` | Rodea una llamada al proveedor y la validación estructurada con eventos. Conserva consumo cuando falla observar una respuesta ya recibida. |
+| `RunInspection` | Captura contenido explícito y acotado por otro sink. No amplía el contrato de metadatos ni conoce SQLite o el navegador. |
+| `LabStore` | Persiste ejecuciones, eventos, inspecciones, checkpoints y revisiones en SQLite. Usa SQL parametrizado, contratos Zod e identidad por corrida. |
+| `LabEvaluationService` | Administra trabajos y cancelación del servidor, reutilizando `EvalRunner`. Cada caso queda vinculado a una ejecución hija inspeccionable. |
+| `LabController`, `LabApi`, `EvaluationView`, `InspectorView` | Consultan historia, muestran datos y gestionan formularios/revisión; no implementan scoring ni reglas de seguridad. |
 | Funciones de `observability/lifecycle.ts` | Validan entrada y registran intento/cierre; reúnen código repetido, sin crear una jerarquía de clases. |
 | `createEventSink` | Escribe metadatos a stderr y archivo. El escritor puede compartirse; cancelar un ticket no aborta el archivo de los demás. |
 | `createApp` | Adapta HTTP, aplica límites y conecta el sink de cada request. Se prueba sin abrir el servidor de producción ni leer claves. |
@@ -89,7 +98,8 @@ Un pedido válido devuelve `application/x-ndjson`, con un objeto por línea:
 
 1. `accepted`: identifica la corrida y el modo.
 2. `event`: contiene un `FlowEvent` validado. Puede haber múltiples eventos mientras la request sigue abierta.
-3. Un único `result` o `error` terminal. El resultado contiene respuesta pública y traza; no propuestas descartadas.
+3. `inspection`: contenido de depuración separado, con su propia secuencia, que puede incluir salidas descartadas. Se muestra sólo en el inspector con advertencia.
+4. Un único `result` o `error` terminal. El resultado contiene respuesta pública y traza.
 
 Antes de abrir el stream, entradas inválidas devuelven JSON con HTTP 400/413/403, o 429 si se alcanzó la concurrencia. Una vez enviados headers 200, un fallo del trabajo se comunica como frame `error`; no es posible cambiar retroactivamente el status HTTP. El cliente exige un terminal válido y EOF: cerrar la conexión sin resultado no equivale a éxito.
 
@@ -103,16 +113,45 @@ node dist/cli.js --text "Necesito una factura" --provider google-ai --flow-event
 
 Sin `--flow-events`, la CLI conserva sus eventos históricos `llm_attempt` y `run_summary`. Con el flag agrega los eventos finos `schemaVersion: 1`. El servidor emite ambas familias a logs y sólo los eventos finos al timeline. Esto evita cambiar el formato de reportes de evals y sus métricas.
 
-Las evals siguen usando el mismo servicio y pueden inyectar un `observe` como cualquier consumidor, pero esta pantalla ejecuta tickets individuales: todavía no es una interfaz para lanzar o adjudicar datasets completos.
+Las evals de la UI usan el mismo servicio y runner que la CLI. El job es independiente del stream HTTP de soporte; se consulta mediante polling cada segundo, sin llamar al LLM para consultar progreso. El servidor guarda un checkpoint por caso, y cada caso tiene su propio requestId, eventos e inspecciones. Abrir su flujo sólo lee SQLite.
+
+## Persistencia, datos y recorrido de un ticket
+
+Para «Me cobraron dos veces», Express valida body/origen/capacidad y crea una fila `running` **antes de consumir API**. `SupportAssistant` recibe un observador y un inspector por corrida. Validar con Zod produce eventos de metadatos; el inspector conserva por separado la entrada original, normalizada, esquema y reglas locales.
+
+`StructuredExecutor` reserva presupuesto y `AttemptObserver` captura la request neutral (system/user/schema, sin headers ni credenciales). El adaptador hace la request real de moderación. La respuesta cruda se guarda como inspección; Zod valida `{decision}` y se captura el resultado validado. Con `allow`, se repite para generación y moderación de respuesta/acciones. El consumo informado concilia la reserva aun si falla un paso posterior. Sólo después del flujo seguro se publica `result`.
+
+Los sinks del borde HTTP guardan cada evento/inspección antes de enviarlo como línea JSONL. HTTP añade una inspección inicial de su body y renumera sólo el canal de inspecciones para conservar orden continuo; no altera los eventos del servicio. `readSupportStream` comprueba identidad y secuencias; `TimelineView` dibuja metadatos y `InspectorView` contenido. `SupportAssistant` no importa Express, SQLite ni componentes visuales. Al finalizar, `LabStore` conserva respuesta y traza; al reabrir desde historial se reconstruye la vista con esos registros, sin requests al proveedor.
+
+SQLite usa `node:sqlite` de Node 24, WAL e índices de historial. Son escrituras pequeñas y síncronas para un laboratorio local; una aplicación de alto volumen requeriría medir bloqueo del event loop y probablemente mover persistencia a un worker o servidor de datos. No añadimos un ORM para un esquema pequeño de cinco tablas. La ruta predeterminada se resuelve desde el paquete, no desde el directorio actual; `--database archivo.sqlite` permite elegir otro destino.
+
+Cada conexión guarda PID y un token propio. El arranque identifica procesos anteriores muertos; el cierre controlado marca sus corridas activas `interrupted`. Un job interrumpido conserva los últimos checkpoints y casos `not_run`; reiniciar no vuelve a consumir API automáticamente. Una cancelación no garantiza costo cero si el proveedor ya empezó el trabajo.
+
+### Endpoints adicionales
+
+| Endpoint | Efecto |
+|---|---|
+| `GET /api/history?kind=support&limit=30&offset=0` | Historia paginada sin API. |
+| `GET /api/history/:id` | Entrada, eventos, inspecciones, resultado y error de una corrida. |
+| `POST /api/evaluations` | Inicia un job validado; devuelve 202 con `jobId`. Consume API en LIVE. |
+| `GET /api/evaluations/:id` | Progreso, reportes, revisiones, gates y selección calculada sin API. |
+| `POST /api/evaluations/:id/cancel` | Solicita cancelación; conserva parciales y consumo conocido. |
+| `PUT /api/evaluations/:id/reports/:reportId/reviews` | Guarda juicio humano validado para un caso del reporte. |
+
+Un job admite `provider`, `operation` (`run`, `compare`, `adversarial`), `promptVersion`, `split` y `compareModeration`. No acepta rutas, claves, modelos arbitrarios ni comandos de shell. El límite USD 5 se comparte entre variantes; las llamadas siguen siendo secuenciales. La UI utiliza las mismas reglas de revisión y selección de desarrollo que los comandos offline. No hay LLM juez.
+
+### Reservas de presupuesto
+
+`budget.reserved` registra dinero estimado comprometido antes de una llamada: por ejemplo, reservar USD 0.010 y conciliar USD 0.002 libera USD 0.008. No hay un cargo o bloqueo bancario. Si no se informa uso, mantener la reserva evita que un timeout deje el contador falsamente en cero. Los registros distinguen costo conocido y reserva por consumo desconocido; no los presentes como factura definitiva.
 
 ## Alcance y seguridad de la herramienta local
 
-- No expone claves, errores crudos SDK, tickets, prompts ni propuestas sin moderar en los eventos. El único contenido de respuesta aparece en `result` después del flujo de seguridad.
+- Los eventos y logs excluyen contenido y claves. El inspector local sí expone tickets, prompts y propuestas crudas, como datos de depuración explícitos; no los interpretes como respuestas aprobadas. Nunca captura configuración secreta, headers ni errores crudos SDK.
 - Usa `textContent`, por lo que HTML dentro de una respuesta se muestra como texto. No interpreta Markdown/HTML generado por el modelo.
 - Escucha en 127.0.0.1, exige Host local y Origin compatible, aplica CSP y rechaza cuerpos grandes. No habilita CORS.
 - Admite cuatro ejecuciones simultáneas por proceso y responde 429 al resto. No hay cola ilimitada ni un limitador de gasto global compartido entre todos los usuarios.
 - Cada request conserva sus eventos, presupuesto y señal. Cerrar/cancelar una no cancela las otras. Un navegador lento puede abortar su ejecución al agotar la espera de escritura; no retiene indefinidamente el servicio.
-- El panel no archiva contenido automáticamente ni tiene historial/reconexión con replay. Recargar pierde la vista actual. Los logs opcionales contienen metadatos.
+- El historial guarda contenido en SQLite en texto claro, excluido de Git. Recargar permite consultar lo persistido; no reconecta un stream de soporte en curso. Las evaluaciones continúan al cerrar la pestaña y se reabren desde historial. Las capturas demasiado grandes se truncan explícitamente.
 - Es un laboratorio local, sin autenticación multiusuario ni infraestructura de despliegue. Publicarlo requeriría decisiones adicionales de autenticación, TLS, cuotas globales y almacenamiento con acceso controlado.
 
 Las pruebas offline y el modo demo validan ingeniería del flujo; no acreditan calidad de respuestas reales, resistencia general a ataques ni capacidad medida de requests por segundo.

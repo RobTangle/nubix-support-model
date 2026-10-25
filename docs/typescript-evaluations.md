@@ -20,6 +20,12 @@ En la app, agregar una acción que sugiere revisión humana tampoco ejecuta una 
 
 ## Preparar y ejecutar
 
+También podés ejecutar y revisar desde **Nubbix Flow Lab**: `npm run web` arranca LIVE; `npm run web:demo` es una simulación explícita. En la sección **Evaluaciones** elegí proveedor, operación y versión. `compare` exige desarrollo e intercala ambos prompts. `adversarial` admite comparar moderación, con el mismo presupuesto compartido. Se permiten un job activo y las mismas llamadas secuenciales de la CLI.
+
+La UI consulta progreso cada segundo sin generar requests al LLM. El job continúa al cerrar la pestaña; **Cancelar evaluación** aborta explícitamente y conserva casos pendientes, parciales y costo conocido. Reabrilo en **Historial → Evaluaciones**. Cada caso muestra respuesta publicada, consumo, señales y salidas crudas; **Abrir flujo e inspector de este caso** permite ver las tres requests y validaciones. Las salidas crudas pueden ser inseguras y no equivalen a la respuesta publicada.
+
+La revisión humana se completa en cada caso: utilidad, corrección, manual, problema grave y, cuando aplica, éxito del ataque o negativa injustificada. Los campos pendientes impiden aprobar. Las revisiones se guardan en SQLite y se precargan al reabrir; los reportes/checkpoints compatibles con la CLI también quedan en `typescript-basic/reports/lab-evals/`. Editar una revisión en la UI actualiza SQLite, no los archivos JSONL de revisión de la CLI. El modo demo siempre conserva `evidence: fake` y no puede recomendar un prompt.
+
 Desde `typescript-basic`, instalá con `npm ci` y ejecutá `npm run build`. La CLI de evaluación es independiente de la CLI de tickets:
 
 ```powershell
@@ -186,7 +192,7 @@ $v2.records | Where-Object id -eq $case.id | ConvertTo-Json -Depth 20
 
 En cada caso, leé `text` y `expectedCategory`; después mirá `response.answer`, `response.category` y `response.actions`. Contrastá la respuesta con el manual. Si querés entender una derivación o fallo, inspeccioná `trace.abstained`, `trace.attempts`, `errorCode` y `rawOutputs`. `rawOutputs` puede incluir propuestas descartadas: el resultado que habría recibido el consumidor es `response`.
 
-El Markdown `<runId>.md` sirve como primer resumen. El JSON tiene además `metrics.perCategory`, `metrics.confusionMatrix` y los casos completos; el resumen Markdown actual no muestra toda esa información. No esperes encontrar una pantalla web: por ahora estos archivos se revisan en el editor o desde la terminal.
+El Markdown `<runId>.md` sirve como primer resumen. El JSON tiene además `metrics.perCategory`, `metrics.confusionMatrix` y los casos completos; el resumen Markdown actual no muestra toda esa información. Podés revisar archivos en el editor/terminal o ejecutar nuevas corridas desde la UI de Flow Lab, que muestra métricas, casos y formularios humanos respaldados por SQLite.
 
 ### 4. Completar las revisiones humanas
 
