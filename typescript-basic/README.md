@@ -73,7 +73,7 @@ El **historial** conserva entradas, eventos, inspecciones y resultados en SQLite
 
 El **inspector de datos** muestra body original, ticket normalizado, esquemas/reglas Zod, requests neutrales al SDK, prompts, outputs de moderación y propuestas intermedias. Es un canal de depuración separado de los eventos/logs, que siguen conteniendo sólo metadatos. Puede mostrar contenido sin moderar, identificado como tal; la respuesta publicada sigue pasando por el flujo completo. No captura claves del servidor, headers de autenticación, entorno ni objetos SDK. La base contiene texto en claro y queda excluida de Git: usá tickets ficticios para aprender y protegé el acceso al archivo.
 
-En **Evaluaciones**, elegí proveedor y operación: `run` (60 casos), `compare` (120, dos prompts intercalados) o `adversarial` (20; 40 si comparás moderación). Usan el mismo `EvalRunner` que la CLI, checkpoints, presupuesto compartido y gates. Podés ver métricas, respuestas y salidas intermedias, abrir el flujo de cada caso y guardar la revisión humana. Los juicios pendientes impiden aprobar o recomendar un prompt. No se añadió un LLM juez. También quedan archivos compatibles con la CLI en `typescript-basic/reports/lab-evals/`; las revisiones editadas en UI se guardan en SQLite.
+En **Evaluaciones**, elegí proveedor y operación: `run` (60 casos), `compare` (60 por versión elegida, intercaladas) o `adversarial` (20; 40 si comparás moderación). La comparación permite dos o más versiones y un baseline incluido entre ellas. Usan el mismo `EvalRunner` que la CLI, checkpoints, presupuesto compartido y gates. Podés ver métricas, respuestas y salidas intermedias, abrir el flujo de cada caso y guardar la revisión humana. Los juicios pendientes impiden aprobar o recomendar un prompt. No se añadió un LLM juez. También quedan archivos compatibles con la CLI en `typescript-basic/reports/lab-evals/`; las revisiones editadas en UI se guardan en SQLite.
 
 **¿Qué es `reservation`?** Antes de cada llamada, el presupuesto compromete una estimación conservadora de tokens de entrada y salida máxima. Cuando llega el consumo, lo concilia y libera el excedente. Si una llamada falla sin informar uso, mantiene una reserva desconocida para no asumir costo cero. Es contabilidad local, no una retención o cobro del proveedor; el límite no garantiza la factura final.
 
@@ -109,7 +109,19 @@ Cada etapa admite **dos intentos totales**, compartidos entre errores transitori
 
 El presupuesto estimado predeterminado es USD `0.05` por ticket completo y USD `5` por ejecución de evals, configurables con `NUBBIX_TICKET_BUDGET_USD` y `NUBBIX_EVAL_BUDGET_USD`. `decimal.js` evita sumas monetarias con punto flotante binario. Se reserva antes de llamar y se concilia con el consumo informado; si falta consumo o su desglose, se conserva una reserva desconocida. Estos controles locales no garantizan la factura final del proveedor. El catálogo compartido está fechado **2026-10-23**: la fecha identifica la instantánea del repositorio, no una verificación actual de precios.
 
-`basic-v1` renderiza exactamente el texto original del prompt Python básico, extrayendo su manual a `src/resources/context.yaml`. `basic-v2` mantiene ese contexto y agrega cuatro ejemplos independientes, uno por categoría. Las políticas de moderación y reparación están en `safety.yaml`. El marcador sintético de filtración se incorpora sólo en evaluaciones, nunca al flujo normal. Python completo usa otro manual: igualdad de controles no implica igualdad de prompts ni resultados entre implementaciones.
+`src/prompt-registry.yaml` es la única lista de versiones, etiquetas, default, baseline y rutas de recursos. `PromptRegistry` valida y precarga los archivos; CLI, UI y evals consumen la misma configuración. `basic-v1` usa el prompt local `prompt.yaml`; `basic-v2` comparte esas instrucciones y agrega cuatro ejemplos independientes, uno por categoría. Las políticas de moderación y reparación están en `safety.yaml`. El marcador sintético de filtración se incorpora sólo en evaluaciones, nunca al flujo normal. Python completo usa otro manual: igualdad de controles no implica igualdad de prompts ni resultados entre implementaciones.
+
+Para agregar una versión con instrucciones propias, creá su YAML y una entrada en el registro, reconstruí y reiniciá. No requiere editar enums ni selectores. Consultá la [guía para agregar y comparar prompts](../docs/prompt-versions.md), que incluye un ejemplo de `basic-v3`, ejemplos opcionales y las reglas de compatibilidad de reportes antiguos.
+
+```powershell
+# Descubrimiento offline: sin claves ni consumo.
+node dist/cli.js --list-prompts
+node dist/eval-cli.js --list-prompts
+
+# Después de registrar basic-v3: estas llamadas sí consumen API.
+node dist/cli.js --provider google-ai --prompt-version basic-v3 --text "Necesito una factura"
+node dist/eval-cli.js compare --provider google-ai --prompt-versions basic-v1 --prompt-versions basic-v3 --baseline-prompt basic-v1
+```
 
 Leé la [guía Python ↔ TypeScript](../docs/typescript-python-guide.md) para seguir un ticket, entender Zod y comparar los archivos, las clases, los errores y la concurrencia.
 
@@ -193,8 +205,11 @@ src/
   service.ts         SupportAssistant: seguridad y respuesta pública
   service-run.ts     Estado y cierre por ticket; derivación por confianza
   execution.ts       StructuredExecutor: llamadas, validación, intentos y reservas
-  prompts.ts         Carga, render y hashes de prompts versionados
-  prompt.yaml        Plantilla original básica, con manual compartido
+  prompt-registry.yaml Única lista de versiones, etiquetas, default y baseline
+  prompt-registry.ts Precarga, validación, render y hashes de recursos registrados
+  prompt-contracts.ts Contratos de IDs/metadatos portables al navegador
+  prompts.ts         API compatible para cargar un bundle mediante el registro
+  prompt.yaml        Plantilla local básica, compartida inicialmente por v1/v2
   resources/         Manual, seguridad y ejemplos few-shot
   budget.ts          Budget, Price y PriceCatalog con decimales
   telemetry.ts       Contratos de eventos y trazas sin contenido
@@ -222,7 +237,7 @@ Podés importar `SupportAssistant`, `createProvider`, `readSettings`, `loadPromp
 
 ## Evaluaciones
 
-Después de `npm run build`, `node dist/eval-cli.js --help` muestra los comandos disponibles. Por ejemplo, `node dist/eval-cli.js compare --provider openai --output-dir reports` ejecuta `basic-v1` y `basic-v2` sobre desarrollo con un presupuesto compartido y **consume saldo real**. Los reportes requieren revisión humana; el programa no cambia el prompt de la aplicación.
+Después de `npm run build`, `node dist/eval-cli.js --help` muestra los comandos disponibles. Por ejemplo, `node dist/eval-cli.js compare --provider openai --output-dir reports` ejecuta todas las versiones registradas sobre desarrollo con un presupuesto compartido y **consume saldo real**. Para elegir un subconjunto, usá `--prompt-versions` y `--baseline-prompt`. Los reportes requieren revisión humana; el programa no cambia el prompt de la aplicación.
 
 Las CLI de tickets y evaluaciones admiten OpenAI, xAI y Google AI. Para evaluar Gemini, usá `--provider google-ai`, configurá `GEMINI_API_KEY` y, si necesitás cambiar el modelo, `NUBBIX_GOOGLE_AI_MODEL`. El modelo debe tener una tarifa configurada. Por ejemplo:
 
@@ -239,7 +254,7 @@ La [guía de evaluaciones TypeScript](../docs/typescript-evaluations.md) explica
 
 ```mermaid
 flowchart TD
-  A["CÓDIGO / compare: preparar 60 casos por versión, basic-v1 y basic-v2"] --> B["CÓDIGO / EvalRunner: elegir caso y versión"]
+  A["CÓDIGO / compare: preparar 60 casos por versión elegida del registro"] --> B["CÓDIGO / EvalRunner: elegir caso y versión"]
   B --> L1["LLM / REQUEST 1<br/>Revisar seguridad de entrada"]
   L1 -->|allow| L2["LLM / REQUEST 2<br/>Clasificar y responder"]
   L2 -->|propuesta válida| L3["LLM / REQUEST 3<br/>Revisar seguridad y respaldo de la propuesta"]
@@ -259,7 +274,7 @@ flowchart TD
   class E human
 ```
 
-`basic-v2` agrega cuatro ejemplos al contexto de `basic-v1`; mantiene manual y políticas. Una comparación completa procesa 120 combinaciones de caso y versión. Habitualmente necesita hasta 360 llamadas iniciales, antes de considerar bloqueos o reintentos. Los USD 5 predeterminados se comparten entre las dos variantes; alcanzar ese límite deja reportes parciales y no acredita una recomendación.
+`basic-v2` agrega cuatro ejemplos al contexto de `basic-v1`; mantiene manual y políticas. Comparar esas dos versiones procesa 120 combinaciones de caso y versión, habitualmente hasta 360 llamadas iniciales antes de bloqueos o reintentos. Cada versión adicional suma 60 casos; el presupuesto USD 5 se comparte entre todas las variantes. Alcanzarlo deja reportes parciales y no acredita una recomendación.
 
 **No hay un LLM juez adicional en las evals.** Las requests 1 y 3 son los moderadores del servicio que estamos evaluando; sus decisiones también pueden estar equivocadas. El código calcula accuracy, F1, costos y reglas regex sin llamar al modelo. Una persona revisa utilidad, corrección, respeto del manual, ataques y falsos bloqueos. Después `summarize` y `compare --reports` sólo leen esas calificaciones y calculan resultados: no solicitan nuevas revisiones a un LLM ni a una persona automáticamente.
 
@@ -294,7 +309,7 @@ flowchart TD
   MODE -->|summarize o compare --reports| OFF
   OFF --> OP{"CÓDIGO: resumir o comparar?"}
   OP -->|summarize| SUM["CÓDIGO: mostrar métricas, calificaciones agregadas y gates"]
-  OP -->|compare --reports| COMPAT{"CÓDIGO: dos prompts de dev y mismo contexto?"}
+  OP -->|compare --reports| COMPAT{"CÓDIGO: 2+ prompts de dev, baseline y mismo contexto?"}
   COMPAT -->|no| BAD["CÓDIGO: invalid_report"]
   COMPAT -->|sí| REVIEW{"CÓDIGO: faltan calificaciones humanas aplicables?"}
   REVIEW -->|sí| PEND["CÓDIGO: pending_human_review; sin recomendación"]

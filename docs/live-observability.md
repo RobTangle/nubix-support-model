@@ -138,7 +138,9 @@ Cada conexión guarda PID y un token propio. El arranque identifica procesos ant
 | `POST /api/evaluations/:id/cancel` | Solicita cancelación; conserva parciales y consumo conocido. |
 | `PUT /api/evaluations/:id/reports/:reportId/reviews` | Guarda juicio humano validado para un caso del reporte. |
 
-Un job admite `provider`, `operation` (`run`, `compare`, `adversarial`), `promptVersion`, `split` y `compareModeration`. No acepta rutas, claves, modelos arbitrarios ni comandos de shell. El límite USD 5 se comparte entre variantes; las llamadas siguen siendo secuenciales. La UI utiliza las mismas reglas de revisión y selección de desarrollo que los comandos offline. No hay LLM juez.
+Un job admite `provider`, `operation` (`run`, `compare`, `adversarial`), `promptVersion`, `split` y `compareModeration`. Para `compare` admite `promptVersions` (dos o más IDs) y `baselinePromptVersion` incluido entre ellos. Si se omiten, usa todas las versiones y el baseline del registro. No acepta rutas, claves, modelos arbitrarios ni comandos de shell. El límite USD 5 se comparte entre variantes; las llamadas siguen siendo secuenciales. La UI utiliza las mismas reglas de revisión y selección de desarrollo que los comandos offline. No hay LLM juez.
+
+`GET /api/config` incluye IDs, etiquetas, default y baseline cargados desde `src/prompt-registry.yaml`. Los selectores de soporte y evals se generan con esos datos. Un ID con formato correcto pero no registrado se rechaza antes de llamar al proveedor. El registro se precarga al iniciar: para agregar instrucciones/ejemplos, consultá la [guía de versiones](prompt-versions.md) y reconstruí/reiniciá. El historial conserva sus IDs originales aunque luego retires una versión del registro; consultarlo no vuelve a cargar su plantilla.
 
 ### Reservas de presupuesto
 

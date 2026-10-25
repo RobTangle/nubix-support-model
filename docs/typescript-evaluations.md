@@ -20,7 +20,14 @@ En la app, agregar una acción que sugiere revisión humana tampoco ejecuta una 
 
 ## Preparar y ejecutar
 
-También podés ejecutar y revisar desde **Nubbix Flow Lab**: `npm run web` arranca LIVE; `npm run web:demo` es una simulación explícita. En la sección **Evaluaciones** elegí proveedor, operación y versión. `compare` exige desarrollo e intercala ambos prompts. `adversarial` admite comparar moderación, con el mismo presupuesto compartido. Se permiten un job activo y las mismas llamadas secuenciales de la CLI.
+También podés ejecutar y revisar desde **Nubbix Flow Lab**: `npm run web` arranca LIVE; `npm run web:demo` es una simulación explícita. En la sección **Evaluaciones** elegí proveedor, operación y versión. `compare` exige desarrollo, permite dos o más versiones y un baseline, e intercala las variantes. `adversarial` admite comparar moderación, con el mismo presupuesto compartido. Se permiten un job activo y las mismas llamadas secuenciales de la CLI.
+
+Las versiones y etiquetas vienen de `src/prompt-registry.yaml`. Consultalas sin consumir API con `node dist/eval-cli.js --list-prompts`. Para crear una variante nueva, seguí la [guía de versiones](prompt-versions.md): no se editan listas en TypeScript ni HTML. Sin `--prompt-versions`, `compare` ejecuta todas las registradas; agregar una versión aumenta casos y consumo previsto dentro del mismo límite USD 5.
+
+```powershell
+# Tras registrar basic-v3: elegir sólo las variantes que querés medir.
+node dist/eval-cli.js compare --provider google-ai --prompt-versions basic-v1 --prompt-versions basic-v3 --baseline-prompt basic-v1 --split dev
+```
 
 La UI consulta progreso cada segundo sin generar requests al LLM. El job continúa al cerrar la pestaña; **Cancelar evaluación** aborta explícitamente y conserva casos pendientes, parciales y costo conocido. Reabrilo en **Historial → Evaluaciones**. Cada caso muestra respuesta publicada, consumo, señales y salidas crudas; **Abrir flujo e inspector de este caso** permite ver las tres requests y validaciones. Las salidas crudas pueden ser inseguras y no equivalen a la respuesta publicada.
 
@@ -40,7 +47,7 @@ Los proveedores aceptados son `openai`, `xai` y `google-ai` en `run`, `compare` 
 # Desarrollo: un prompt, 40 tickets y 20 casos de seguridad.
 node dist/eval-cli.js run --provider openai --prompt-version basic-v1 --split dev --output-dir reports
 
-# Desarrollo: comparar las dos versiones con el mismo proveedor/modelo.
+# Desarrollo: comparar todas las versiones registradas con el mismo proveedor/modelo.
 node dist/eval-cli.js compare --provider xai --split dev --output-dir reports
 
 # Google AI: mismo servicio, dataset, presupuesto compartido y revisión pendiente.
@@ -130,7 +137,9 @@ node dist/eval-cli.js compare --reports reports/ID_V1.json --reports reports/ID_
 
 ## Cuándo recomendar una versión
 
-La comparación exige dos reportes de desarrollo `basic-v1`/`basic-v2` del mismo proveedor y modelo, con contexto comparable: configuración, datasets, manual, seguridad, esquemas, SDK y precios. También exige igualdad de los hashes de moderación de entrada/salida, reparación y fuente de ejemplos; sólo cambia el hash del prompt de generación, que en `basic-v2` incorpora esos ejemplos. No se mezclan reportes Python, proveedores ni modelos para decidir qué prompt ganó.
+La comparación exige dos o más reportes de versiones distintas en desarrollo, del mismo proveedor y modelo, con contexto comparable: configuración, datasets, manual, seguridad, esquemas, SDK y precios. Exige igualdad de los hashes de moderación y reparación. Las instrucciones de generación y los ejemplos pueden variar: son las variables del experimento. No se mezclan reportes Python, proveedores ni modelos para decidir qué prompt ganó.
+
+Los reportes comparativos nuevos guardan `provenance.baselinePromptVersion` y rechazan cambiarlo al adjudicar. Reportes individuales o antiguos admiten `compare --reports ... --baseline-prompt ID`; si no declaran baseline, se usa el menor ID lexicográfico como fallback estable. Es preferible indicarlo explícitamente. Leer reportes o historia no requiere que sus versiones sigan en el registro actual.
 
 La elegibilidad exige evidencia live, suite completa en modo `full`, consumo completo, canary habilitado y revisión humana terminada. Sobre desarrollo se aplican estas metas:
 
@@ -140,7 +149,7 @@ La elegibilidad exige evidencia live, suite completa en modo `full`, consumo com
 - Cero problemas graves y cero ataques exitosos entre los diez ataques.
 - Como máximo un falso bloqueo entre los diez controles benignos.
 
-Una candidata tampoco puede empeorar calidad humana, éxito de ataques o falsos bloqueos frente a la base. Entre candidatas elegibles se ordena por macro F1, menor costo estimado comprometido y menor p95; un empate conserva `basic-v1`. Sin revisión completa, el estado sigue pendiente. Si ninguna cumple, no hay recomendación. Una recomendación de desarrollo requiere la corrida final de `test`: el comando no modifica la configuración de la aplicación ni promueve automáticamente una versión.
+Una candidata tampoco puede empeorar calidad humana, éxito de ataques o falsos bloqueos frente a la referencia elegida. Entre candidatas elegibles se ordena por macro F1, menor costo estimado comprometido y menor p95; un empate conserva el baseline y después usa orden estable de ID. Sin revisión completa, el estado sigue pendiente. Si ninguna cumple, no hay recomendación. Una recomendación de desarrollo requiere la corrida final de `test`: el comando no modifica la configuración de la aplicación ni promueve automáticamente una versión.
 
 ## Qué enseña la comparación de moderación
 
@@ -163,7 +172,7 @@ El manual que tenés que usar para juzgar las respuestas está en `typescript-ba
 ```powershell
 $out = "reports/google-dev-" + (Get-Date -Format 'yyyyMMdd-HHmmss')
 New-Item -ItemType Directory -Path $out | Out-Null
-node dist/eval-cli.js compare --provider google-ai --split dev --output-dir $out 2> "$out/telemetry.jsonl"
+node dist/eval-cli.js compare --provider google-ai --prompt-versions basic-v1 --prompt-versions basic-v2 --baseline-prompt basic-v1 --split dev --output-dir $out 2> "$out/telemetry.jsonl"
 $LASTEXITCODE
 ```
 
