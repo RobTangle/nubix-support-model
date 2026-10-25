@@ -34,6 +34,8 @@ Los IDs admiten de 1 a 64 caracteres: empiezan con letra minúscula y continúan
 
 `PromptRegistry.load()` valida todos los archivos al iniciar, incluidos los de versiones que todavía no elegiste. Una referencia rota impide arrancar antes de consumir API. `get()` entrega una copia del bundle ensamblado; una request no puede modificar el bundle reutilizado por otra. `loadPrompts()` conserva un atajo compatible para scripts y delega al mismo registro.
 
+En cada `safety.yaml`, las claves `input_moderation` y `output_moderation` identifican explícitamente las instrucciones de las llamadas 1 y 3. El cargador inserta el manual y las entrega como `inputModeration` y `outputModeration` en TypeScript. `repair` se usa para corregir JSON/esquemas inválidos y `evaluation_marker` sólo en evals. Los nombres anteriores `input`/`output` ya no son válidos en ese YAML; esto no modifica los campos propios de las APIs de los proveedores.
+
 ## Ejemplo: crear basic-v3
 
 Desde `typescript-basic`, copiá la carpeta de una versión existente. El destino nuevo no debe existir; así evitás sobrescribir un experimento anterior:

@@ -40,8 +40,8 @@ const safetySchema = z.strictObject({
   version: text,
   repair: text,
   evaluation_marker: text,
-  input: text,
-  output: text,
+  input_moderation: text,
+  output_moderation: text,
 });
 const examplesSchema = z.strictObject({
   version: text,
@@ -136,8 +136,8 @@ export class PromptRegistry {
         const safety = safetySchema.parse(parse(safetySource));
         const render = (template: string): string =>
           template.replaceAll('{{manual}}', context.manual.trimEnd());
-        const inputModeration = render(safety.input);
-        const outputModeration = render(safety.output);
+        const inputModeration = render(safety.input_moderation);
+        const outputModeration = render(safety.output_moderation);
         const template = systemSchema.parse(parse(sources.get(entry.system)!));
         const examplesSource = entry.examples ? sources.get(entry.examples)! : '';
         const examples = entry.examples

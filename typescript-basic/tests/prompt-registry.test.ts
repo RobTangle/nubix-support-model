@@ -59,8 +59,8 @@ async function fixture() {
           version: 'safety-v1',
           repair: 'Corregí el JSON.',
           evaluation_marker: 'CANARIO',
-          input: 'ENTRADA {{manual}}',
-          output: 'SALIDA {{manual}}',
+          input_moderation: 'ENTRADA {{manual}}',
+          output_moderation: 'SALIDA {{manual}}',
         }),
       ),
       ...(entry.examples
@@ -218,8 +218,8 @@ test('versiones independientes: editar instrucciones, manual, seguridad y ejempl
         version: 'safety-v2',
         repair: 'Reparación V2',
         evaluation_marker: 'CANARIO V2',
-        input: 'ENTRADA V2 {{manual}}',
-        output: 'SALIDA V2 {{manual}}',
+        input_moderation: 'ENTRADA V2 {{manual}}',
+        output_moderation: 'SALIDA V2 {{manual}}',
       }),
     );
     await writeFile(
@@ -277,6 +277,32 @@ test('versiones independientes: un enlace interno tampoco puede compartir el man
     files.manifest.prompts[1]!.context = 'versions/basic-v2/shared/context.yaml';
     await files.save();
     await assert.rejects(PromptRegistry.load(files.url), AppError);
+  } finally {
+    await files.close();
+  }
+});
+
+test('seguridad: claves explícitas se traducen al bundle y nombres antiguos se rechazan', async () => {
+  const files = await fixture();
+  try {
+    await files.save();
+    const bundle = (await PromptRegistry.load(files.url)).get('basic-v1');
+    assert.equal(bundle.inputModeration, 'ENTRADA MANUAL FICTICIO');
+    assert.equal(bundle.outputModeration, 'SALIDA MANUAL FICTICIO');
+    await writeFile(
+      join(files.directory, 'versions/basic-v1/safety.yaml'),
+      stringify({
+        version: 'legacy',
+        repair: 'Corregí JSON',
+        evaluation_marker: 'CANARIO',
+        input: 'Viejo input',
+        output: 'Viejo output',
+      }),
+    );
+    await assert.rejects(
+      PromptRegistry.load(files.url),
+      (error: unknown) => error instanceof AppError && error.code === 'configuration_error',
+    );
   } finally {
     await files.close();
   }

@@ -9,7 +9,7 @@ baseline: basic-v1
 # Las rutas son relativas a este registro y pertenecen a versions/<id>/.
 # system: instrucciones de generación (llamada 2, tras permitir la entrada).
 # context: manual insertado en {{manual}} de generación y ambas moderaciones.
-# safety: instrucciones de moderación de entrada/salida, reparación y canario de evals.
+# safety: input_moderation/output_moderation, reparación y canario de evals.
 # examples: demostraciones opcionales añadidas a generación; no son llamadas aparte.
 prompts:
   - id: basic-v1
