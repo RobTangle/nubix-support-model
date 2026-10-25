@@ -4,126 +4,114 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>Nubbix Flow Lab · Observabilidad en vivo</title>
+    <title>Nubbix Flow Lab · Soporte y evaluaciones</title>
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/app.js"></script>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Saltar al contenido</a>
     <div class="page-shell">
       <header class="site-header">
-        <a class="brand" href="/" aria-label="Nubbix Flow Lab, inicio"
+        <a class="brand" href="#ticket-title" data-lab-link
           ><span class="brand-mark" aria-hidden="true">N</span
-          ><span>Nubbix <span class="brand-light">Flow Lab</span></span></a
-        >
-        <span id="mode-label" class="mode-badge">CONECTANDO…</span>
+          ><span
+            >Nubbix <span class="brand-light">Flow Lab</span
+            ><small>LABORATORIO DE SOPORTE CON IA</small></span
+          ></a
+        ><span id="mode-label" class="mode-badge">CONECTANDO…</span>
       </header>
-      <main>
-        <section class="intro" aria-labelledby="page-title">
-          <p class="eyebrow">OBSERVABILIDAD · TYPESCRIPT + EXPRESS</p>
-          <h1 id="page-title">Seguí un ticket.<br /><span>Entendé cada paso.</span></h1>
-          <p class="intro-description">
-            Desde la validación hasta la respuesta final: requests al LLM, decisiones, tiempos y
-            consumo, a medida que ocurren.
-          </p>
-        </section>
-        <nav class="lab-navigation" aria-label="Secciones del laboratorio">
-          <a href="#ticket-title">Ejecutar soporte</a><a href="#history-panel">Historial local</a
-          ><a href="#inspector-panel">Inspector de datos</a
-          ><a href="#evaluation-panel">Evaluaciones</a>
-        </nav>
-        <section id="history-panel" class="panel lab-panel" aria-labelledby="history-title">
-          <div class="panel-heading">
-            <span class="section-number">H</span>
-            <h2 id="history-title">Historial persistente</h2>
+      <nav class="lab-navigation" aria-label="Secciones del laboratorio">
+        <a data-lab-link href="#ticket-title">Probar ticket</a
+        ><a data-lab-link href="#evaluation-panel">Evaluaciones</a
+        ><a data-lab-link href="#history-panel">Historial</a
+        ><a data-lab-link href="#guide-panel">Guía de uso</a>
+      </nav>
+      <main id="main-content" tabindex="-1">
+        <section data-lab-view="support" aria-labelledby="ticket-title">
+          <div class="view-heading">
+            <p class="eyebrow">PLAYGROUND</p>
+            <h1 id="ticket-title" tabindex="-1">Probá un ticket. Seguí cada decisión.</h1>
+            <p>
+              Elegí un proveedor y un prompt. Inspeccioná el recorrido, el consumo y la propuesta
+              final.
+            </p>
           </div>
-          <p class="field-help">
-            Las ejecuciones se conservan localmente al recargar. Abrirlas sólo consulta datos
-            guardados: no llama al LLM. Cada fila identifica su modalidad y estado.
-          </p>
-          <div class="history-controls">
-            <label for="history-kind">Tipo de ejecución</label>
-            <select id="history-kind">
-              <option value="support">Tickets de soporte</option>
-              <option value="evaluation">Evaluaciones</option>
-            </select>
-            <button id="history-refresh" class="secondary-button" type="button">
-              Recargar historial
-            </button>
-          </div>
-          <p id="history-status" role="status" aria-live="polite">Conectando…</p>
-          <div id="history-list" class="history-list" aria-label="Ejecuciones guardadas"></div>
-          <div class="history-pagination">
-            <button id="history-previous" class="secondary-button" type="button" disabled>
-              Anterior</button
-            ><button id="history-next" class="secondary-button" type="button" disabled>
-              Siguiente
-            </button>
-          </div>
-        </section>
-        <div class="workspace">
-          <aside class="control-column">
-            <section class="panel ticket-panel" aria-labelledby="ticket-title">
+          <div class="workspace">
+            <section class="panel ticket-panel" aria-labelledby="request-title">
               <div class="panel-heading">
                 <span class="section-number">01</span>
-                <h2 id="ticket-title">Prepará tu consulta</h2>
+                <h2 id="request-title">Configurar consulta</h2>
               </div>
               <p id="mode-description" class="mode-description">
                 Cargando configuración del servidor…
               </p>
               <form id="support-form">
-                <label for="ticket">Ticket de soporte</label>
-                <textarea id="ticket" name="text" rows="6" required aria-describedby="ticket-help">
-Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar los cargos.</textarea>
-                <p id="ticket-help" class="field-help">
-                  Hasta 8000 puntos Unicode. Usá datos ficticios para experimentar.
-                </p>
-                <div class="examples" aria-label="Ejemplos de tickets">
-                  <button type="button" data-example="billing">Facturación</button>
-                  <button type="button" data-example="technical">Técnico</button>
-                  <button type="button" data-example="account">Cuenta</button>
-                  <button type="button" data-example="other">Otros</button>
-                  <button type="button" data-example="blocked">Bloqueo demo</button>
-                </div>
-                <label for="provider">Proveedor y modelo</label>
-                <select
-                  id="provider"
-                  name="provider"
+                <label for="ticket">Consulta del cliente</label
+                ><textarea
+                  id="ticket"
+                  name="text"
+                  rows="6"
                   required
-                  aria-label="Proveedor y modelo"
-                ></select>
-                <label for="prompt-version">Versión del prompt</label>
-                <select id="prompt-version" name="promptVersion" required></select>
+                  aria-describedby="ticket-help ticket-count ticket-validation"
+                >
+Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar los cargos.</textarea>
+                <div class="field-meta">
+                  <p id="ticket-help" class="field-help">
+                    Usá datos ficticios; el inspector conserva el contenido localmente.
+                  </p>
+                  <span id="ticket-count" class="field-help"></span>
+                </div>
+                <p id="ticket-validation" class="error-message" role="status" hidden></p>
+                <div class="examples" aria-label="Cargar un ejemplo">
+                  <span>Ejemplos</span
+                  ><button type="button" data-example="billing">Facturación</button
+                  ><button type="button" data-example="technical">Técnico</button
+                  ><button type="button" data-example="account">Cuenta</button
+                  ><button type="button" data-example="other">Otros</button
+                  ><button type="button" data-example="blocked">Bloqueo demo</button>
+                </div>
+                <label for="provider">Proveedor y modelo</label
+                ><select id="provider" name="provider" required></select>
+                <label for="prompt-version">Versión del prompt</label
+                ><select id="prompt-version" name="promptVersion" required></select>
+                <p class="field-help">
+                  Mantener el mismo modelo permite comparar mejor los prompts.
+                </p>
                 <div class="form-actions">
                   <button id="run-button" class="primary-button" type="submit" disabled>
-                    Ejecutar ticket <span aria-hidden="true">↗</span>
-                  </button>
-                  <button id="cancel-button" class="secondary-button" type="button" disabled>
+                    Ejecutar ticket <span aria-hidden="true">↗</span></button
+                  ><button id="cancel-button" class="secondary-button" type="button" disabled>
                     Cancelar
                   </button>
                 </div>
               </form>
             </section>
-            <section class="legend-panel" aria-labelledby="legend-title">
-              <h2 id="legend-title">Quién hace cada paso</h2>
-              <p>
-                <span class="actor-badge badge-llm">LLM · REQUEST</span> Llamada al proveedor
-                seleccionado.
+            <section class="panel response-panel" aria-labelledby="response-title">
+              <div class="panel-heading">
+                <span class="section-number">02</span>
+                <h2 id="response-title">Respuesta publicada</h2>
+              </div>
+              <p class="field-help">
+                Aparece después de moderar la propuesta. Las acciones son sugerencias para una
+                persona: no se ejecutan.
               </p>
-              <p>
-                <span class="actor-badge badge-code">CÓDIGO</span> Validación, presupuesto y
-                registro local.
-              </p>
-              <p class="human-explanation">
-                La revisión humana puede sugerirse; este panel no asigna un agente ni ejecuta un LLM
-                juez.
-              </p>
+              <div id="result" class="result-content">
+                <div class="empty-state">
+                  <span class="empty-symbol" aria-hidden="true">↗</span>
+                  <h3>La propuesta aparecerá acá</h3>
+                  <p>
+                    Ejecutá una consulta o abrí un ticket del
+                    <a data-lab-link href="#history-panel">historial</a>.
+                  </p>
+                </div>
+              </div>
             </section>
-          </aside>
+          </div>
           <section class="panel execution-panel" aria-labelledby="timeline-title">
             <div class="timeline-header">
               <div class="panel-heading">
-                <span class="section-number">02</span>
-                <h2 id="timeline-title">Flujo en vivo</h2>
+                <span class="section-number">03</span>
+                <h2 id="timeline-title" tabindex="-1">Flujo en vivo</h2>
               </div>
               <span id="event-count" class="event-count">0 eventos</span>
             </div>
@@ -134,14 +122,32 @@ Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar l
               </p>
             </div>
             <div class="run-meta">
-              <span class="run-label">REQUEST ID</span
+              <span class="run-label">ID DE EJECUCIÓN</span
               ><code id="run-id">Se asignará al ejecutar</code>
             </div>
             <p id="selected-run-mode" class="selected-run-mode">
               Todavía no hay una ejecución seleccionada
             </p>
+            <div class="flow-legend">
+              <span
+                ><span class="actor-badge badge-llm">LLM · REQUEST</span> Consume API en modo
+                LIVE</span
+              ><span><span class="actor-badge badge-code">CÓDIGO</span> Procesamiento local</span>
+            </div>
+            <details class="inline-help">
+              <summary>¿Cómo leer los tiempos y las etapas?</summary>
+              <p>
+                El flujo habitual hace tres requests al LLM: moderar entrada, generar y moderar
+                salida. Zod valida el formato con código. Los reintentos agregan llamadas.
+              </p>
+              <p>
+                Cada evento muestra hora UTC y tiempo desde el inicio. Δ mide el intervalo desde el
+                evento anterior; la duración mide la operación cuando está disponible. Una
+                recomendación de revisión humana no asigna automáticamente un agente.
+              </p>
+            </details>
             <div class="timeline-options">
-              <p>Timestamp UTC · tiempo transcurrido · duración</p>
+              <p>Eventos reales del backend · detalles desplegables</p>
               <label><input id="follow-events" type="checkbox" checked /> Seguir eventos</label>
             </div>
             <div
@@ -152,119 +158,286 @@ Me cobraron dos veces la suscripción de este mes. Necesito ayuda para revisar l
             >
               <div id="timeline-empty" class="empty-state">
                 <span class="empty-symbol" aria-hidden="true">⌁</span>
-                <h3>El recorrido empieza acá</h3>
+                <h3>El recorrido empieza con una consulta</h3>
                 <p>
-                  Elegí un ticket y ejecutalo para ver los eventos reales del backend. No hay pasos
-                  ni porcentajes simulados en la interfaz.
+                  Acá verás validaciones, requests al LLM, decisiones y consumo a medida que
+                  suceden.
                 </p>
               </div>
               <ol id="timeline" class="timeline" aria-label="Línea de tiempo de eventos"></ol>
             </div>
             <p id="run-summary" class="run-summary"></p>
           </section>
-        </div>
-        <section class="panel response-panel" aria-labelledby="response-title">
-          <div class="panel-heading">
-            <span class="section-number">03</span>
-            <h2 id="response-title">Resultado publicado</h2>
-          </div>
-          <p class="response-help">
-            La propuesta se muestra después de completar la moderación de salida, o como respuesta
-            estática ante un bloqueo. Las acciones son sugerencias.
-          </p>
-          <div id="result" class="result-content">
-            <p class="placeholder">
-              La respuesta final aparecerá cuando termine una ejecución válida.
+          <section id="inspector-panel" class="panel lab-panel" aria-labelledby="inspector-title">
+            <div class="panel-heading">
+              <span class="section-number">04</span>
+              <h2 id="inspector-title">Inspector de datos</h2>
+            </div>
+            <p class="debug-warning">
+              Depuración local: incluye body, prompts y respuestas crudas, que pueden estar sin
+              moderar. Inspeccionar un dato no significa que haya sido publicado. El contenido se
+              muestra como texto.
+            </p>
+            <p class="field-help">
+              Abrí una etapa para ver qué se envió o recibió. Los esquemas y el JSON completo están
+              dentro de los detalles técnicos.
+            </p>
+            <div
+              id="inspections"
+              class="inspection-list"
+              aria-label="Datos de depuración de la ejecución seleccionada"
+            ></div>
+          </section>
+        </section>
+        <section data-lab-view="evaluations" hidden aria-labelledby="evaluation-panel">
+          <div class="view-heading">
+            <p class="eyebrow">CALIDAD Y SEGURIDAD</p>
+            <h1 id="evaluation-panel" tabindex="-1">Evaluaciones</h1>
+            <p>
+              Compará con evidencia. Primero ejecutá los casos; después revisá las respuestas y los
+              criterios de aceptación.
             </p>
           </div>
+          <section class="panel">
+            <div class="panel-heading">
+              <span class="section-number">01</span>
+              <h2>Configurar evaluación</h2>
+            </div>
+            <p id="evaluation-mode" class="selected-run-mode">Cargando modalidad del servidor…</p>
+            <form id="evaluation-form" class="evaluation-form">
+              <label>Proveedor y modelo<select id="evaluation-provider" required></select></label>
+              <label
+                >Qué querés evaluar<select id="evaluation-operation">
+                  <option value="run">Evaluar un prompt</option>
+                  <option value="compare">Comparar versiones de prompt</option>
+                  <option value="adversarial">Suite adversarial</option>
+                </select></label
+              >
+              <p id="evaluation-explanation" class="field-help evaluation-wide"></p>
+              <label id="evaluation-single-prompt"
+                >Versión del prompt<select id="evaluation-prompt"></select
+              ></label>
+              <div id="evaluation-versions-label" class="evaluation-wide" hidden>
+                <fieldset id="evaluation-versions" aria-describedby="evaluation-versions-help">
+                  <legend>Versiones a comparar</legend>
+                </fieldset>
+                <p id="evaluation-versions-help" class="field-help">
+                  Marcá al menos dos versiones e incluí la referencia.
+                </p>
+              </div>
+              <label id="evaluation-baseline-label" hidden
+                >Referencia (baseline)<select id="evaluation-baseline"></select
+              ></label>
+              <p id="evaluation-comparison-help" class="field-help" hidden>
+                La referencia es el punto de partida: las candidatas deben mejorar sin regresiones
+                de calidad o seguridad.
+              </p>
+              <label
+                >Conjunto de datos<select id="evaluation-split">
+                  <option value="dev">Desarrollo (dev) · elegir prompt</option>
+                  <option value="test">Prueba (test) · validación final</option></select
+                ><span class="field-help"
+                  >Elegí con dev. Reservá test para validar la elección final.</span
+                ></label
+              >
+              <label class="checkbox-label evaluation-wide"
+                ><input id="evaluation-moderation" type="checkbox" /><span
+                  >Comparar con/sin moderación<span class="field-help"
+                    >Sólo suite adversarial. Duplica los casos y mide el efecto de la mitigación; el
+                    modo sin moderación existe únicamente en este arnés.</span
+                  ></span
+                ></label
+              >
+              <p
+                id="evaluation-plan"
+                class="evaluation-plan evaluation-wide"
+                aria-live="polite"
+              ></p>
+              <div class="form-actions evaluation-wide">
+                <button id="evaluation-start" class="primary-button" type="submit" disabled>
+                  Iniciar evaluación</button
+                ><button id="evaluation-cancel" class="secondary-button" type="button" disabled>
+                  Cancelar trabajo
+                </button>
+              </div>
+            </form>
+            <details class="inline-help">
+              <summary>Consumo, presupuesto y cancelación</summary>
+              <p>
+                En LIVE, cada caso usa API real. Topes locales predeterminados: USD 5 por trabajo y
+                USD 0,05 por ticket. Una reserva preventiva verifica el margen antes de llamar; no
+                aparta dinero de tu cuenta ni consulta el saldo del proveedor. Las estimaciones no
+                garantizan el importe de la factura.
+              </p>
+              <p>
+                El trabajo continúa si cambiás de vista, cerrás o recargás esta página. Reabrilo
+                desde Historial. Cancelar trabajo detiene las llamadas posteriores; una llamada en
+                curso puede haber consumido tokens. Se conservan los casos completados y los
+                pendientes.
+              </p>
+            </details>
+          </section>
+          <section class="panel evaluation-output" aria-labelledby="evaluation-results-title">
+            <div class="panel-heading">
+              <span class="section-number">02</span>
+              <h2 id="evaluation-results-title">Resultados y revisión</h2>
+            </div>
+            <p id="evaluation-status" role="status" aria-live="polite">
+              Configurá una evaluación o abrí una del historial.
+            </p>
+            <code id="evaluation-id" class="evaluation-id"></code>
+            <p id="evaluation-feedback" role="status" aria-live="polite" hidden></p>
+            <div id="evaluation-results" class="evaluation-results"></div>
+          </section>
         </section>
-        <section id="inspector-panel" class="panel lab-panel" aria-labelledby="inspector-title">
-          <div class="panel-heading">
-            <span class="section-number">04</span>
-            <h2 id="inspector-title">Inspector de datos por etapa</h2>
+        <section data-lab-view="history" hidden aria-labelledby="history-panel">
+          <div class="view-heading">
+            <p class="eyebrow">REGISTRO LOCAL</p>
+            <h1 id="history-panel" tabindex="-1">Historial de ejecuciones</h1>
+            <p>
+              Retomá una evaluación o inspeccioná un ticket. Abrir registros guardados no llama al
+              LLM ni consume tokens.
+            </p>
           </div>
-          <p class="debug-warning">
-            Depuración local: incluye body, entrada normalizada, schemas, requests y respuestas del
-            LLM. Puede contener propuestas sin moderar. Esta sección está separada del resultado
-            publicado y presenta todo como texto.
-          </p>
-          <div
-            id="inspections"
-            class="inspection-list"
-            aria-label="Datos de depuración de la ejecución seleccionada"
-          ></div>
-        </section>
-        <section id="evaluation-panel" class="panel lab-panel" aria-labelledby="evaluation-title">
-          <div class="panel-heading">
-            <span class="section-number">05</span>
-            <h2 id="evaluation-title">Evaluaciones y revisión humana</h2>
-          </div>
-          <p id="evaluation-mode" class="selected-run-mode">Cargando modalidad del servidor…</p>
-          <p class="field-help">
-            El trabajo continúa en el servidor si cerrás o recargás esta página. Reabrilo desde el
-            historial de evaluaciones. Sólo el botón Cancelar trabajo solicita detenerlo.
-          </p>
-          <form id="evaluation-form" class="evaluation-form">
-            <label>Proveedor y modelo<select id="evaluation-provider" required></select></label>
-            <label
-              >Operación<select id="evaluation-operation">
-                <option value="run">Evaluar un prompt</option>
-                <option value="compare">Comparar versiones de prompt</option>
-                <option value="adversarial">Suite adversarial</option>
-              </select></label
-            >
-            <label id="evaluation-single-prompt"
-              >Prompt<select id="evaluation-prompt"></select
-            ></label>
-            <label id="evaluation-versions-label" hidden
-              >Versiones a comparar<select
-                id="evaluation-versions"
-                multiple
-                size="4"
-                aria-describedby="evaluation-versions-help"
-              ></select
-              ><span id="evaluation-versions-help" class="field-help"
-                >Elegí al menos dos versiones e incluí la referencia. Ctrl/Cmd permite elegir
-                varias.</span
-              ></label
-            >
-            <label id="evaluation-baseline-label" hidden
-              >Prompt de referencia (baseline)<select id="evaluation-baseline"></select
-            ></label>
-            <label
-              >Partición<select id="evaluation-split">
-                <option value="dev">dev · desarrollo y selección</option>
-                <option value="test">test · validación reservada</option>
-              </select></label
-            >
-            <label class="checkbox-label"
-              ><input id="evaluation-moderation" type="checkbox" /> Comparar con/sin moderación
-              (comparten presupuesto)</label
-            >
-            <div class="form-actions">
-              <button id="evaluation-start" class="primary-button" type="submit" disabled>
-                Iniciar evaluación</button
-              ><button id="evaluation-cancel" class="secondary-button" type="button" disabled>
-                Cancelar trabajo
+          <section class="panel" aria-labelledby="history-title">
+            <h2 id="history-title">Ejecuciones guardadas</h2>
+            <div class="history-controls">
+              <label for="history-kind">Tipo de ejecución</label
+              ><select id="history-kind">
+                <option value="support">Tickets de soporte</option>
+                <option value="evaluation">Evaluaciones</option></select
+              ><button id="history-refresh" class="secondary-button" type="button">
+                Actualizar
               </button>
             </div>
-          </form>
-          <p class="budget-explanation">
-            Presupuesto predeterminado: USD 5 por trabajo; USD 0,05 por ticket. La reserva
-            preventiva de presupuesto aparta saldo antes de llamar al proveedor: no es un cargo. El
-            costo real estimado conocido se calcula con el uso recibido y el tarifario; una reserva
-            de consumo desconocido cubre llamadas sin uso confirmado.
-          </p>
-          <p id="evaluation-status" role="status" aria-live="polite">
-            Listo para configurar una evaluación.
-          </p>
-          <code id="evaluation-id" class="evaluation-id"></code>
-          <div id="evaluation-results" class="evaluation-results"></div>
+            <p id="history-status" role="status" aria-live="polite">Conectando…</p>
+            <div id="history-list" class="history-list" aria-label="Ejecuciones guardadas"></div>
+            <div class="history-pagination">
+              <button id="history-previous" class="secondary-button" type="button" disabled>
+                Anterior</button
+              ><button id="history-next" class="secondary-button" type="button" disabled>
+                Siguiente
+              </button>
+            </div>
+            <p class="field-help">
+              Los registros viven en la base de datos local del servidor. DEMO identifica datos
+              simulados; LIVE identifica ejecuciones con API.
+            </p>
+          </section>
+        </section>
+        <section data-lab-view="guide" hidden aria-labelledby="guide-panel">
+          <div class="view-heading">
+            <p class="eyebrow">EMPEZÁ POR ACÁ</p>
+            <h1 id="guide-panel" tabindex="-1">Guía del laboratorio</h1>
+            <p>Un recorrido para entender qué hace cada función y qué evidencia aporta.</p>
+          </div>
+          <div class="guide-grid">
+            <article class="panel">
+              <span class="section-number">01</span>
+              <h2>Seguir un ticket</h2>
+              <ol class="guide-steps">
+                <li>
+                  En <a data-lab-link href="#ticket-title">Probar ticket</a>, escribí una consulta
+                  ficticia y elegí proveedor y prompt.
+                </li>
+                <li>
+                  Ejecutá y seguí las tres etapas: moderación de entrada → generación → moderación
+                  de salida. Cada request al LLM está identificada.
+                </li>
+                <li>
+                  Abrí los detalles del flujo para ver tiempos, tokens y costo; usá el inspector
+                  para body, prompts, decisiones y esquemas.
+                </li>
+                <li>
+                  Leé la respuesta publicada. Una derivación segura usa una respuesta estática; no
+                  publica la propuesta rechazada.
+                </li>
+              </ol>
+            </article>
+            <article class="panel">
+              <span class="section-number">02</span>
+              <h2>Comparar prompts</h2>
+              <ol class="guide-steps">
+                <li>
+                  En <a data-lab-link href="#evaluation-panel">Evaluaciones</a>, seleccioná Comparar
+                  versiones y el mismo proveedor/modelo.
+                </li>
+                <li>
+                  Marcá la referencia y las candidatas; usá dev. La comparación intercala las
+                  versiones por caso y comparte presupuesto.
+                </li>
+                <li>
+                  Revisá métricas y casos: los errores y abstenciones también cuentan como fallos de
+                  clasificación.
+                </li>
+                <li>
+                  Completá la revisión humana de cada caso aplicable y guardala. Recién entonces se
+                  pueden evaluar todos los criterios.
+                </li>
+                <li>
+                  Validá la versión elegida con test. El resultado sobre un dataset pequeño no
+                  garantiza desempeño de producción.
+                </li>
+              </ol>
+            </article>
+            <article class="panel">
+              <h2>Qué revisa cada uno</h2>
+              <dl class="guide-definitions">
+                <dt>Código</dt>
+                <dd>
+                  Formato Zod, clasificación contra etiquetas, errores, tokens, costos y señales por
+                  reglas. Las coincidencias de texto no son una evaluación semántica completa.
+                </dd>
+                <dt>LLM</dt>
+                <dd>
+                  Clasifica, responde y modera entrada/salida durante cada caso. No hay un LLM juez
+                  evaluando utilidad o corrección de las respuestas.
+                </dd>
+                <dt>Persona</dt>
+                <dd>
+                  Califica utilidad, corrección y respeto del manual. Consultá el context.yaml y
+                  safety.yaml de la versión en src/prompting/versions/ dentro del paquete
+                  TypeScript. Adjudica ataques exitosos y negativas injustificadas. Pendiente no
+                  equivale a aprobado.
+                </dd>
+              </dl>
+            </article>
+            <article class="panel">
+              <h2>Conceptos que vas a encontrar</h2>
+              <dl class="guide-definitions">
+                <dt>Reserva</dt>
+                <dd>
+                  Estimación local antes de una llamada. Si faltan datos de consumo, se conserva
+                  como pendiente; no es saldo real del proveedor.
+                </dd>
+                <dt>Macro-F1</dt>
+                <dd>
+                  Promedio del F1 de las cuatro categorías. Evita que una categoría frecuente oculte
+                  malos resultados en otras.
+                </dd>
+                <dt>p95</dt>
+                <dd>
+                  Latencia que no supera aproximadamente el 95 % de los casos observados.
+                  Complementa la mediana (p50).
+                </dd>
+                <dt>Confianza</dt>
+                <dd>
+                  Valor autodeclarado por el modelo, sin calibrar. Menos de 0,70 agrega revisión
+                  humana sugerida.
+                </dd>
+                <dt>Seguridad y privacidad</dt>
+                <dd>
+                  El inspector conserva contenido de depuración, incluso propuestas inseguras. Este
+                  lab local y su manual ficticio no reemplazan políticas aprobadas ni una interfaz
+                  de producción con control de acceso.
+                </dd>
+              </dl>
+            </article>
+          </div>
         </section>
       </main>
       <footer>
-        Laboratorio didáctico de Nubbix · Manual ficticio · La validez del JSON no demuestra calidad
-        semántica.
+        Nubbix Flow Lab · Manual ficticio · JSON válido no demuestra calidad semántica.
       </footer>
     </div>
   </body>

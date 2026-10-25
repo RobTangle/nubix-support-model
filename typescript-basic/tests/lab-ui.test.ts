@@ -61,8 +61,8 @@ test('registro UI: descubre variantes nuevas y envía selección de comparación
   const operation = document.querySelector<HTMLSelectElement>('#evaluation-operation')!;
   operation.value = 'compare';
   operation.dispatchEvent(new dom.window.Event('change'));
-  const versions = document.querySelector<HTMLSelectElement>('#evaluation-versions')!;
-  for (const option of versions.options) option.selected = option.value !== 'basic-v2';
+  const versions = document.querySelectorAll<HTMLInputElement>('input[name=promptVersions]');
+  for (const option of versions) option.checked = option.value !== 'basic-v2';
   document.querySelector<HTMLSelectElement>('#evaluation-baseline')!.value = 'basic-v1';
   document
     .querySelector<HTMLFormElement>('#evaluation-form')!
@@ -268,10 +268,7 @@ test('historial: pagina, selecciona y restaura datos guardados sin iniciar reque
     maxConcurrent: 1,
   });
   await delay(5);
-  assert.match(
-    dom.window.document.querySelector('#history-list')!.textContent!,
-    /LIVE · completed/,
-  );
+  assert.match(dom.window.document.querySelector('#history-list')!.textContent!, /Completada/);
   dom.window.document.querySelector<HTMLButtonElement>('#history-next')!.click();
   await delay(5);
   assert.equal(urls.at(-1), '/api/history?kind=support&limit=30&offset=30');
@@ -323,7 +320,7 @@ test('evaluaciones: desconectar la página aborta polling sin cancelar el trabaj
   await delay(5);
   assert.match(
     dom.window.document.querySelector('#evaluation-status')!.textContent!,
-    /LIVE · running · 2\/60/,
+    /API real · En curso · 2\/60/,
   );
   assert.equal(
     dom.window.document.querySelector<HTMLButtonElement>('#evaluation-cancel')!.disabled,

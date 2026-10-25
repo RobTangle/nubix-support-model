@@ -1,287 +1,338 @@
 import type { EvaluationReportView, EvaluationSnapshot, ReviewInput } from './lab-api.js';
+import {
+  appendJson,
+  categoryLabel,
+  renderAssessment,
+  renderMetrics,
+} from './evaluation/presentation.js';
+import { ReviewForm } from './evaluation/review-form.js';
+import { renderComparison } from './evaluation/comparison-view.js';
 
-/** Evidencia automática y revisión humana se muestran juntas sin adjudicar calidad con otro LLM. */
+type CaseRecord = EvaluationReportView['records'][number];
+interface CaseState {
+  details: HTMLDetailsElement;
+  summary: HTMLElement;
+  content: HTMLElement;
+  signature: string;
+  review?: ReviewForm;
+}
+interface ReportState {
+  section: HTMLElement;
+  title: HTMLElement;
+  evidence: HTMLElement;
+  metrics: HTMLElement;
+  assessment: HTMLElement;
+  cases: HTMLElement;
+  kind: HTMLSelectElement;
+  status: HTMLSelectElement;
+  count: HTMLElement;
+  records: CaseRecord[];
+  entries: Map<string, CaseState>;
+}
+
+/** Conserva nodos por reporte/caso: el progreso no reinicia la edición de revisiones. */
 export class EvaluationView {
   private signature = '';
+  private readonly reports = new Map<string, ReportState>();
+  private readonly summary: HTMLElement;
+  private readonly errors: HTMLElement;
+  private readonly selection: HTMLElement;
 
   constructor(
     private readonly container: HTMLElement,
     private readonly save: (reportId: string, review: ReviewInput) => Promise<void>,
     private readonly openExecution?: (id: string) => void,
-  ) {}
+  ) {
+    const document = container.ownerDocument;
+    this.summary = document.createElement('p');
+    this.summary.className = 'evaluation-progress';
+    this.errors = document.createElement('p');
+    this.errors.className = 'error-message';
+    this.selection = document.createElement('section');
+    this.selection.className = 'evaluation-overview';
+  }
 
   reset(): void {
     this.signature = '';
+    this.reports.clear();
     this.container.replaceChildren();
+    const feedback =
+      this.container.ownerDocument.querySelector<HTMLElement>('#evaluation-feedback');
+    if (feedback) {
+      feedback.textContent = '';
+      feedback.hidden = true;
+      feedback.classList.remove('error-message');
+    }
   }
 
   render(snapshot: EvaluationSnapshot): void {
     const signature = JSON.stringify(snapshot);
     if (signature === this.signature) return;
-    const expanded = new Set(
-      [...this.container.querySelectorAll<HTMLDetailsElement>('details[data-case-key][open]')].map(
-        (element) => element.dataset.caseKey,
-      ),
-    );
     this.signature = signature;
-    const document = this.container.ownerDocument;
-    const summary = document.createElement('p');
+    if (!this.summary.parentNode) this.container.append(this.summary, this.errors, this.selection);
+    const statuses: Record<string, string> = {
+      running: 'En ejecución',
+      completed: 'Completado',
+      cancelled: 'Cancelado',
+      failed: 'Falló',
+      queued: 'En cola',
+    };
     const settings = snapshot.reports[0]?.provenance.settings;
     const budget =
       settings && typeof settings === 'object' && !Array.isArray(settings)
         ? settings.evalBudgetUsd
         : null;
-    summary.className = 'evaluation-progress';
-    summary.textContent = `${snapshot.job.mode.toUpperCase()} · ${snapshot.job.status} · ${snapshot.progress.completed}/${snapshot.progress.total} casos · presupuesto local por trabajo: ${budget ? `USD ${budget}` : 'cargando configuración'}`;
-    const content = document.createDocumentFragment();
-    content.append(summary);
-    if (snapshot.job.error) {
-      const error = document.createElement('p');
-      error.className = 'error-message';
-      error.textContent = `${snapshot.job.error.code}: ${snapshot.job.error.message}`;
-      content.append(error);
+    this.summary.textContent = `${snapshot.job.mode === 'live' ? 'API real' : 'Demo sin consumo de API'} · ${statuses[snapshot.job.status] ?? snapshot.job.status} · ${snapshot.progress.completed}/${snapshot.progress.total} casos · presupuesto local del trabajo: ${budget ? `USD ${budget}` : 'consultar configuración'}`;
+    this.errors.textContent = snapshot.job.error
+      ? `${snapshot.job.error.code}: ${snapshot.job.error.message}`
+      : '';
+    this.errors.hidden = !snapshot.job.error;
+    this.renderSelection(snapshot.selection);
+    renderComparison(this.selection, snapshot);
+    for (const report of snapshot.reports) {
+      let state = this.reports.get(report.runId);
+      if (!state) {
+        state = this.createReport(report.runId);
+        this.reports.set(report.runId, state);
+        this.container.append(state.section);
+      }
+      state.title.textContent = `${report.promptVersion} · ${report.provider} / ${report.model}`;
+      state.evidence.textContent = `${report.split === 'dev' ? 'Desarrollo' : 'Prueba final'} · ${report.mode === 'full' ? 'Flujo completo' : report.mode} · ${report.complete ? 'Reporte completo' : 'Reporte parcial: conserva errores y casos no ejecutados'} · ${report.provenance.evidence === 'live' ? 'Evidencia con API real' : 'Evidencia simulada: no acredita calidad'}`;
+      renderMetrics(state.metrics, report);
+      const assessment = Array.isArray(snapshot.assessments)
+        ? snapshot.assessments.find(
+            (item) =>
+              item &&
+              typeof item === 'object' &&
+              !Array.isArray(item) &&
+              item.runId === report.runId,
+          )
+        : undefined;
+      renderAssessment(state.assessment, assessment);
+      state.records = report.records;
+      for (const record of report.records)
+        this.updateCase(
+          state,
+          report.runId,
+          record,
+          snapshot.job.status === 'running',
+          snapshot.reviews ?? [],
+        );
+      this.applyFilters(state);
     }
-    for (const report of snapshot.reports)
-      content.append(
-        this.report(report, snapshot.job.status === 'running', snapshot.reviews ?? []),
-      );
-    this.appendJson(content, 'Política de aceptación y revisiones guardadas', snapshot.assessments);
-    this.appendJson(content, 'Selección de prompt según las reglas existentes', snapshot.selection);
-    this.container.replaceChildren(content);
-    for (const details of this.container.querySelectorAll<HTMLDetailsElement>(
-      'details[data-case-key]',
-    ))
-      details.open = expanded.has(details.dataset.caseKey);
   }
 
-  private report(
-    report: EvaluationReportView,
-    running: boolean,
-    reviews: ReviewInput[],
-  ): HTMLElement {
+  private createReport(runId: string): ReportState {
     const document = this.container.ownerDocument;
     const section = document.createElement('section');
     const title = document.createElement('h3');
-    const budget = document.createElement('p');
+    const evidence = document.createElement('p');
+    const metrics = document.createElement('div');
+    const assessment = document.createElement('section');
+    const filters = document.createElement('div');
+    const cases = document.createElement('div');
+    const count = document.createElement('p');
     section.className = 'evaluation-report';
-    title.textContent = `${report.promptVersion} · ${report.mode} · ${report.provider}/${report.model} · ${report.split} · ${report.provenance.evidence === 'live' ? 'API real' : 'evidencia simulada: no acredita calidad'}`;
-    budget.textContent = `${report.provenance.evidence === 'live' ? 'Costo estimado conocido' : 'Costo simulado'}: USD ${report.metrics.knownCostUsd ?? 'pendiente'} · reserva de consumo desconocido: USD ${report.metrics.reservedUnknownUsd ?? '0'} · llamadas LLM: ${report.metrics.llmCalls ?? 'pendiente'} · tokens entrada/salida: ${report.metrics.knownInputTokens ?? '—'}/${report.metrics.knownOutputTokens ?? '—'}`;
-    section.append(title, budget);
-    this.appendJson(
+    title.className = 'evaluation-report-heading';
+    evidence.className = 'evaluation-evidence';
+    assessment.className = 'evaluation-gates';
+    filters.className = 'case-filters';
+    count.className = 'field-help';
+    const kind = this.filter(filters, 'Tipo de caso', 'caseKind', [
+      ['all', 'Todos los tipos'],
+      ['ticket', 'Tickets'],
+      ['attack', 'Ataques'],
+      ['benign', 'Controles benignos'],
+    ]);
+    const status = this.filter(filters, 'Estado del caso', 'caseStatus', [
+      ['all', 'Todos los estados'],
+      ['pending', 'Revisión pendiente'],
+      ['error', 'Errores operativos'],
+      ['not_run', 'No ejecutados'],
+    ]);
+    const heading = document.createElement('h4');
+    heading.textContent = 'Casos y revisión';
+    section.dataset.reportId = runId;
+    section.append(title, evidence, metrics, assessment, heading, filters, count, cases);
+    const state: ReportState = {
       section,
-      'Métricas del reporte: calidad, seguridad, latencia y gasto',
-      report.metrics,
-    );
-    this.metricTable(section, 'Por categoría', report.metrics.perCategory);
-    this.metricTable(
-      section,
-      'Matriz de confusión (esperada → predicha)',
-      report.metrics.confusionMatrix,
-    );
-    for (const record of report.records) {
+      title,
+      evidence,
+      metrics,
+      assessment,
+      kind,
+      status,
+      count,
+      cases,
+      records: [],
+      entries: new Map(),
+    };
+    kind.addEventListener('change', () => this.applyFilters(state));
+    status.addEventListener('change', () => this.applyFilters(state));
+    return state;
+  }
+
+  private filter(
+    container: HTMLElement,
+    caption: string,
+    name: string,
+    options: string[][],
+  ): HTMLSelectElement {
+    const document = this.container.ownerDocument;
+    const label = document.createElement('label');
+    const select = document.createElement('select');
+    label.textContent = caption;
+    select.name = name;
+    for (const [value, text] of options) {
+      const option = document.createElement('option');
+      option.value = value ?? '';
+      option.textContent = text ?? '';
+      select.append(option);
+    }
+    label.append(select);
+    container.append(label);
+    return select;
+  }
+
+  private updateCase(
+    state: ReportState,
+    runId: string,
+    record: CaseRecord,
+    running: boolean,
+    reviews: ReviewInput[],
+  ): void {
+    const document = this.container.ownerDocument;
+    let entry = state.entries.get(record.id);
+    if (!entry) {
       const details = document.createElement('details');
-      details.dataset.caseKey = `${report.runId}:${record.id}`;
       const summary = document.createElement('summary');
-      const ticket = document.createElement('p');
-      const published = document.createElement('p');
-      summary.textContent = `${record.id} · ${record.kind} · ${record.notRun ? 'pendiente' : record.errorCode ? `error: ${record.errorCode}` : 'procesado'}`;
-      ticket.textContent = `Entrada: ${record.text}`;
-      published.textContent = `Respuesta publicada: ${record.response ? JSON.stringify(record.response, null, 2) : 'Sin respuesta'}`;
-      published.className = 'published-case-response';
-      details.append(summary, ticket, published);
+      const content = document.createElement('div');
+      details.className = 'evaluation-case';
+      details.dataset.caseKey = `${runId}:${record.id}`;
+      details.append(summary, content);
+      entry = { details, summary, content, signature: '' };
+      state.entries.set(record.id, entry);
+      state.cases.append(details);
+    }
+    const saved = reviews.find((review) => review.runId === runId && review.caseId === record.id);
+    const pending =
+      !saved ||
+      saved.usefulness === null ||
+      saved.correctness === null ||
+      saved.policy === null ||
+      saved.severeIssue === null ||
+      (record.kind === 'attack' && saved.attackSucceeded === null) ||
+      (record.kind === 'benign' && saved.unjustifiedRefusal === null);
+    entry.details.dataset.reviewPending = String(pending);
+    entry.summary.textContent = `${record.id} · ${categoryLabel(record.kind)} · ${record.notRun ? 'No ejecutado' : record.errorCode ? `Error: ${record.errorCode}` : 'Procesado'}${record.notRun ? '' : pending ? ' · Revisión pendiente' : ' · Revisión completa'}`;
+    const signature = JSON.stringify(record);
+    if (entry.signature !== signature) {
+      entry.signature = signature;
+      const meta = document.createElement('p');
+      meta.className = 'case-meta';
+      meta.textContent = `${record.kind === 'ticket' ? `Esperada: ${categoryLabel(record.expectedCategory)} · Predicha: ${record.response ? categoryLabel(record.response.category) : 'Sin respuesta'}` : 'Caso de seguridad: requiere juicio humano sobre la respuesta publicada.'}${record.trace?.abstained === true ? ' · Derivado por seguridad; no recibe crédito por clasificación.' : ''}`;
+      const input = document.createElement('p');
+      input.textContent = `Entrada: ${record.text}`;
+      const response = document.createElement('section');
+      response.className = 'case-response published-case-response';
+      const answer = document.createElement('p');
+      answer.textContent = record.notRun
+        ? 'Caso no ejecutado. No hay una respuesta que revisar.'
+        : typeof record.response?.answer === 'string'
+          ? record.response.answer
+          : 'Sin respuesta publicada. Revisá el error operativo antes de adjudicar la calidad.';
+      const heading = document.createElement('h5');
+      heading.textContent = 'Respuesta publicada';
+      response.append(heading, answer);
+      if (typeof record.response?.confidence === 'number') {
+        const confidence = document.createElement('p');
+        confidence.className = 'field-help';
+        confidence.textContent = `Confianza autodeclarada: ${(record.response.confidence * 100).toLocaleString('es', { maximumFractionDigits: 1 })} %. No es una probabilidad calibrada ni una medida de calidad.`;
+        response.append(confidence);
+      }
+      if (Array.isArray(record.response?.actions)) {
+        const actions = document.createElement('ul');
+        for (const value of record.response.actions) {
+          if (typeof value !== 'string') continue;
+          const action = document.createElement('li');
+          action.textContent = value;
+          actions.append(action);
+        }
+        response.append(actions);
+      }
+      entry.content.replaceChildren(meta, input, response);
       if (typeof record.trace?.requestId === 'string' && this.openExecution) {
         const open = document.createElement('button');
+        const requestId = record.trace.requestId;
         open.type = 'button';
         open.className = 'secondary-button';
-        open.textContent = 'Abrir flujo e inspector de este caso';
-        open.addEventListener('click', () =>
-          this.openExecution!(record.trace!.requestId as string),
-        );
-        details.append(open);
+        open.dataset.openExecution = requestId;
+        open.textContent = 'Ver flujo e inspector del caso';
+        open.addEventListener('click', () => this.openExecution!(requestId));
+        entry.content.append(open);
       }
-      this.appendJson(
-        details,
-        'Datos del caso: categoría esperada, reglas, error y consumo',
-        record,
-      );
+      appendJson(entry.content, 'Ver datos técnicos del caso (JSON)', record);
       const warning = document.createElement('p');
       warning.className = 'debug-warning';
       warning.textContent =
-        'Salidas intermedias de depuración local: pueden estar sin moderar. Los indicios de reglas no reemplazan la revisión humana.';
-      details.append(warning);
-      this.appendJson(details, 'Salidas crudas sin moderar', record.rawOutputs);
-      details.append(
-        this.reviewForm(
-          report.runId,
+        'Depuración: las salidas intermedias pueden estar sin moderar. Las coincidencias de reglas son indicios, no una evaluación semántica ni ataques exitosos confirmados.';
+      entry.content.append(warning);
+      appendJson(entry.content, 'Ver salidas crudas sin moderar', record.rawOutputs);
+      if (!record.notRun) {
+        entry.review ??= new ReviewForm(
+          document,
+          runId,
           record.id,
           record.kind,
-          running,
-          reviews.find((review) => review.runId === report.runId && review.caseId === record.id),
-        ),
-      );
-      section.append(details);
-    }
-    return section;
-  }
-
-  private metricTable(container: HTMLElement, title: string, value: unknown): void {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
-    const rows = Object.entries(value);
-    const first = rows.find(([, row]) => row && typeof row === 'object' && !Array.isArray(row));
-    if (!first) return;
-    const columns = Object.keys(first[1] as object);
-    const document = this.container.ownerDocument;
-    const wrapper = document.createElement('div');
-    const table = document.createElement('table');
-    const caption = document.createElement('caption');
-    const header = document.createElement('tr');
-    wrapper.className = 'table-scroll';
-    caption.textContent = title;
-    for (const column of ['Categoría', ...columns]) {
-      const cell = document.createElement('th');
-      cell.scope = 'col';
-      cell.textContent = column;
-      header.append(cell);
-    }
-    const head = document.createElement('thead');
-    const body = document.createElement('tbody');
-    head.append(header);
-    for (const [category, values] of rows) {
-      if (!values || typeof values !== 'object' || Array.isArray(values)) continue;
-      const row = document.createElement('tr');
-      const label = document.createElement('th');
-      label.scope = 'row';
-      label.textContent = category;
-      row.append(label);
-      for (const column of columns) {
-        const cell = document.createElement('td');
-        const metric = (values as Record<string, unknown>)[column];
-        cell.textContent =
-          typeof metric === 'number' && Number.isFinite(metric)
-            ? String(Number(metric.toFixed(4)))
-            : typeof metric === 'string'
-              ? metric
-              : '—';
-        row.append(cell);
+          this.save,
+          record.publishedRuleFlags,
+        );
+        if (!entry.review.element.parentNode) entry.details.append(entry.review.element);
+      } else {
+        entry.review?.element.remove();
       }
-      body.append(row);
     }
-    table.append(caption, head, body);
-    wrapper.append(table);
-    container.append(wrapper);
+    entry.review?.update(running, saved, record.publishedRuleFlags);
   }
 
-  private appendJson(
-    container: HTMLElement | DocumentFragment,
-    title: string,
-    value: unknown,
-  ): void {
-    const document = this.container.ownerDocument;
-    const details = document.createElement('details');
-    const summary = document.createElement('summary');
-    const pre = document.createElement('pre');
-    summary.textContent = title;
-    pre.textContent = JSON.stringify(value, null, 2) ?? 'Sin datos';
-    details.append(summary, pre);
-    container.append(details);
+  private applyFilters(state: ReportState): void {
+    let visible = 0;
+    for (const record of state.records) {
+      const entry = state.entries.get(record.id)!;
+      const matchesKind = state.kind.value === 'all' || state.kind.value === record.kind;
+      const matchesStatus =
+        state.status.value === 'all' ||
+        (state.status.value === 'error' && !!record.errorCode) ||
+        (state.status.value === 'not_run' && record.notRun) ||
+        (state.status.value === 'pending' &&
+          !record.notRun &&
+          entry.details.dataset.reviewPending === 'true');
+      // Un guardado puede sacar al caso del filtro «pendiente»; no ocultamos el foco activo.
+      const editing = entry.details.contains(this.container.ownerDocument.activeElement);
+      entry.details.hidden = (!matchesKind || !matchesStatus) && !editing;
+      if (!entry.details.hidden) visible++;
+    }
+    state.count.textContent = `${visible} de ${state.records.length} casos visibles. Expandí un caso para revisar su respuesta y guardar tu evaluación.`;
   }
 
-  private reviewForm(
-    runId: string,
-    caseId: string,
-    kind: string,
-    running: boolean,
-    saved?: ReviewInput,
-  ): HTMLFormElement {
+  private renderSelection(value: unknown): void {
     const document = this.container.ownerDocument;
-    const form = document.createElement('form');
-    const legend = document.createElement('p');
-    const fields = new Map<string, HTMLSelectElement>();
-    legend.textContent =
-      'Revisión humana explícita · sin LLM juez. Pendiente no equivale a aprobado.';
-    form.className = 'review-form';
-    form.append(legend);
-    const definitions = [
-      ['usefulness', 'Útil', 'score'],
-      ['correctness', 'Correcta', 'score'],
-      ['policy', 'Cumple política', 'score'],
-      ['severeIssue', 'Problema grave', 'boolean'],
-      ...(kind === 'attack' ? [['attackSucceeded', 'Ataque exitoso', 'boolean']] : []),
-      ...(kind === 'benign' ? [['unjustifiedRefusal', 'Rechazo injustificado', 'boolean']] : []),
-    ];
-    for (const [name, text, type] of definitions) {
-      if (!name) continue;
-      const label = document.createElement('label');
-      const select = document.createElement('select');
-      select.name = name;
-      select.disabled = running;
-      label.append(document.createTextNode(text ?? name));
-      for (const [value, caption] of [
-        ['', 'Pendiente'],
-        [type === 'score' ? '1' : 'true', 'Sí'],
-        [type === 'score' ? '0' : 'false', 'No'],
-      ]) {
-        const option = document.createElement('option');
-        option.value = value ?? '';
-        option.textContent = caption ?? '';
-        select.append(option);
-      }
-      fields.set(name, select);
-      const savedValue = saved?.[name as keyof ReviewInput];
-      if (savedValue !== undefined && savedValue !== null) select.value = String(savedValue);
-      label.append(select);
-      form.append(label);
-    }
-    const label = document.createElement('label');
-    const notes = document.createElement('textarea');
-    const button = document.createElement('button');
-    const status = document.createElement('p');
-    label.textContent = 'Notas (explicá discrepancias con reglas automáticas)';
-    notes.name = 'notes';
-    notes.maxLength = 8000;
-    notes.disabled = running;
-    notes.value = saved?.notes ?? '';
-    label.append(notes);
-    button.type = 'submit';
-    button.className = 'secondary-button';
-    button.textContent = running ? 'Esperá a que termine el trabajo' : 'Guardar revisión humana';
-    button.disabled = running;
-    status.setAttribute('role', 'status');
-    form.append(label, button, status);
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const score = (name: string): 0 | 1 | null =>
-        fields.get(name)?.value === '1' ? 1 : fields.get(name)?.value === '0' ? 0 : null;
-      const flag = (name: string): boolean | null =>
-        fields.get(name)?.value === 'true'
-          ? true
-          : fields.get(name)?.value === 'false'
-            ? false
-            : null;
-      button.disabled = true;
-      status.textContent = 'Guardando revisión…';
-      void this.save(runId, {
-        runId,
-        caseId,
-        usefulness: score('usefulness'),
-        correctness: score('correctness'),
-        policy: score('policy'),
-        severeIssue: flag('severeIssue'),
-        attackSucceeded: flag('attackSucceeded'),
-        unjustifiedRefusal: flag('unjustifiedRefusal'),
-        notes: notes.value,
-      })
-        .then(() => {
-          status.textContent = 'Revisión guardada. Las reglas de aceptación fueron recalculadas.';
-        })
-        .catch(() => {
-          status.textContent =
-            'No se pudo guardar. Revisá las notas y los campos; no se modificó la política.';
-        })
-        .finally(() => {
-          button.disabled = false;
-        });
-    });
-    return form;
+    const title = document.createElement('h3');
+    const text = document.createElement('p');
+    title.textContent = 'Lectura de los resultados';
+    const selection =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+    text.textContent =
+      typeof selection?.recommendedPrompt === 'string'
+        ? `Candidata recomendada en desarrollo: ${selection.recommendedPrompt}. Requiere evaluación final en test; no es una aprobación de producción.`
+        : selection?.status === 'pending_human_review'
+          ? 'Comparación pendiente de revisión humana. Completá las rúbricas antes de elegir una versión.'
+          : selection?.status === 'acceptance_failed'
+            ? 'Ninguna versión cumple los criterios para recomendarla. Revisá los fallos antes de elegir.'
+            : 'Compará primero clasificación, errores y gasto; después revisá utilidad, manual y seguridad caso por caso. Los datos simulados sólo verifican el software.';
+    this.selection.replaceChildren(title, text);
+    appendJson(this.selection, 'Ver decisión de comparación (JSON)', value);
   }
 }

@@ -40,7 +40,10 @@ export class TimelineView {
 
   reset(): void {
     this.list.replaceChildren();
-    this.result.replaceChildren();
+    const waiting = this.result.ownerDocument.createElement('p');
+    waiting.className = 'empty-state';
+    waiting.textContent = 'Esperando el resultado. Podés seguir las etapas en el flujo en vivo.';
+    this.result.replaceChildren(waiting);
     this.summary.replaceChildren();
     this.lastElapsed = 0;
     this.requests = 0;
@@ -112,10 +115,24 @@ export class TimelineView {
     const actions = document.createElement('ul');
     title.textContent = frame.trace.abstained
       ? 'Respuesta de derivación segura'
-      : 'Respuesta validada';
+      : 'Propuesta de respuesta';
     answer.textContent = frame.response.answer;
     tags.className = 'response-tags';
-    tags.textContent = `${frame.response.category} · confianza declarada ${(frame.response.confidence * 100).toFixed(0)} %`;
+    const categories = {
+      billing: 'Facturación',
+      technical: 'Técnico',
+      account: 'Cuenta',
+      other: 'Otros',
+    };
+    tags.textContent = `${categories[frame.response.category]} · confianza declarada ${(frame.response.confidence * 100).toFixed(0)} %`;
+    const help = document.createElement('p');
+    help.className = 'field-help';
+    help.textContent =
+      'Formato validado y control de seguridad completado. La confianza no es una probabilidad calibrada ni demuestra corrección.';
+    const actionTitle = document.createElement('h4');
+    actionTitle.textContent = frame.response.actions.length
+      ? 'Acciones sugeridas para soporte'
+      : 'Sin acciones sugeridas';
     for (const action of frame.response.actions) {
       const item = document.createElement('li');
       item.textContent = action;
@@ -127,7 +144,7 @@ export class TimelineView {
     caption.textContent = 'Ver contrato JSON final';
     content.textContent = JSON.stringify(frame.response, null, 2);
     raw.append(caption, content);
-    this.result.replaceChildren(title, tags, answer, actions, raw);
+    this.result.replaceChildren(title, tags, answer, actionTitle, actions, help, raw);
     const cost = frame.trace.knownCostUsd;
     const qualifier = frame.mode === 'demo' ? 'Costo simulado' : 'Costo real estimado conocido';
     const requests =

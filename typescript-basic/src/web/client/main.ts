@@ -7,6 +7,8 @@ import { LabController } from './lab-controller.js';
 import { streamFrameSchema } from '../contracts.js';
 import type { LabRunDetail } from '../../lab/contracts.js';
 import { populatePromptOptions } from './prompt-options.js';
+import { LabNavigation } from './lab-navigation.js';
+import { runStatusLabels } from './history-view.js';
 
 interface Elements {
   form: HTMLFormElement;
@@ -45,6 +47,7 @@ class PlaygroundController {
     private readonly view: TimelineView,
     private readonly elements: Elements,
     private readonly inspector: InspectorView,
+    private readonly navigation: LabNavigation,
   ) {}
 
   async initialize(): Promise<void> {
@@ -56,17 +59,22 @@ class PlaygroundController {
       this.elements.status.textContent = 'Cancelando la ejecución…';
       this.active?.abort();
     });
+    this.elements.ticket.addEventListener('input', () => this.validateTicket());
     for (const button of this.elements.form.querySelectorAll<HTMLButtonElement>('[data-example]')) {
       button.addEventListener('click', () => {
         this.elements.ticket.value = examples[button.dataset.example ?? ''] ?? '';
         this.elements.ticket.focus();
+        this.validateTicket();
       });
     }
     try {
       this.configuration = await this.api.configuration();
       this.configure(this.configuration);
-      this.laboratory = new LabController(this.elements.form.ownerDocument, new LabApi(), (run) =>
-        this.restore(run),
+      this.laboratory = new LabController(
+        this.elements.form.ownerDocument,
+        new LabApi(),
+        (run) => this.restore(run),
+        (view) => this.navigation.open(view),
       );
       this.laboratory.initialize(this.configuration);
     } catch (error) {
@@ -93,19 +101,40 @@ class PlaygroundController {
       configuration.mode === 'demo'
         ? 'Proveedor simulado. Los eventos recorren el servicio real; tokens y costos son simulados. No mide calidad del modelo.'
         : 'Se usará la clave configurada en el servidor. Cada etapa y reintento consume saldo; las claves nunca se envían al navegador.';
-    this.elements.run.disabled = !available;
+    for (const button of this.elements.form.querySelectorAll<HTMLButtonElement>(
+      '[data-example="blocked"]',
+    ))
+      button.hidden = configuration.mode !== 'demo';
+    this.validateTicket();
     this.elements.status.textContent = available
       ? 'Listo para ejecutar'
       : 'No hay proveedores disponibles';
   }
 
+  private validateTicket(): boolean {
+    const length = Array.from(this.elements.ticket.value).length;
+    const valid = length <= 8000 && Boolean(this.elements.ticket.value.trim());
+    required('#ticket-count').textContent = `${length.toLocaleString('es-AR')} / 8000 caracteres`;
+    const feedback = required('#ticket-validation');
+    feedback.hidden = valid;
+    feedback.textContent = valid
+      ? ''
+      : length > 8000
+        ? 'La consulta supera el máximo de 8000 caracteres.'
+        : 'Escribí una consulta para continuar.';
+    this.elements.ticket.setAttribute('aria-invalid', String(!valid));
+    this.elements.run.disabled =
+      Boolean(this.active) ||
+      !valid ||
+      !this.configuration?.providers.some((provider) => provider.available);
+    return valid;
+  }
+
   private async run(): Promise<void> {
     if (this.active || !this.configuration) return;
-    if (
-      !this.elements.ticket.value.trim() ||
-      Array.from(this.elements.ticket.value).length > 8000
-    ) {
+    if (!this.validateTicket()) {
       this.elements.status.textContent = 'Ingresá un ticket de entre 1 y 8000 puntos Unicode.';
+      this.elements.ticket.focus();
       return;
     }
     const input = {
@@ -175,9 +204,9 @@ class PlaygroundController {
     this.elements.empty.hidden = true;
     this.elements.requestId.textContent = run.id;
     this.elements.count.textContent = `${run.events.length} eventos guardados`;
-    this.elements.status.textContent = `Historial · ${run.status} · ${run.createdAt}`;
+    this.elements.status.textContent = `Historial · ${runStatusLabels[run.status]} · ${new Date(run.createdAt).toLocaleString('es-AR')}`;
     required('#selected-run-mode').textContent =
-      `${run.mode.toUpperCase()} · ejecución guardada · ${run.status}`;
+      `${run.mode.toUpperCase()} · ejecución guardada · ${runStatusLabels[run.status]}`;
     for (const event of run.events) this.view.append(event);
     for (const entry of run.inspections) this.inspector.append(entry);
     if (
@@ -187,6 +216,7 @@ class PlaygroundController {
       typeof run.input.text === 'string'
     )
       this.elements.ticket.value = run.input.text;
+    this.validateTicket();
     const saved =
       run.result && typeof run.result === 'object' && !Array.isArray(run.result) ? run.result : {};
     const frame = streamFrameSchema.safeParse({
@@ -213,6 +243,7 @@ class PlaygroundController {
     this.elements.run.disabled = busy;
     this.elements.cancel.disabled = !busy;
     this.elements.form.setAttribute('aria-busy', String(busy));
+    this.validateTicket();
   }
 }
 
@@ -223,6 +254,8 @@ function required<T extends HTMLElement>(selector: string): T {
   return element;
 }
 
+const navigation = new LabNavigation(document);
+navigation.initialize();
 const view = new TimelineView(required('#timeline'), required('#result'), required('#run-summary'));
 const inspector = new InspectorView(required('#inspections'));
 const controller = new PlaygroundController(
@@ -245,5 +278,6 @@ const controller = new PlaygroundController(
     follow: required('#follow-events'),
   },
   inspector,
+  navigation,
 );
 void controller.initialize();
