@@ -58,8 +58,22 @@ type PreparedPrompt = { bundle: PromptBundle; marker: string };
  * El servicio recibe bundles listos y no necesita conocer archivos ni listas de versiones.
  */
 export class PromptRegistry {
+  /**
+   * ID elegido cuando el consumidor omite una versión, por ejemplo get() o la CLI sin flag.
+   * También define la selección inicial de la UI; una selección explícita tiene prioridad.
+   */
   readonly defaultVersion: string;
+  /**
+   * Referencia predeterminada para comparar evaluaciones si no se indica otra.
+   * Debe estar entre las variantes comparadas; no decide qué versión atiende un ticket.
+   */
   readonly baselineVersion: string;
+  /**
+   * Catálogo ordenado de {id, label} para selectores, --list-prompts y evals.
+   * Contiene metadatos, no instrucciones: get(id) entrega el bundle preparado.
+   * readonly protege el contrato TypeScript; Object.freeze impide mutar el arreglo
+   * y sus elementos en ejecución (no congela toda la instancia de PromptRegistry).
+   */
   readonly versions: readonly PromptMetadata[];
 
   private constructor(
