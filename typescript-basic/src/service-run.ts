@@ -19,12 +19,13 @@ import { runtimeSettingsSchema } from './runtime-settings.js';
 import {
   HUMAN_REVIEW_ACTION,
   supportResponseSchema,
-  ticketSchema,
   type SupportResponse,
   type Ticket,
 } from './schemas.js';
 import type { RunTrace } from './telemetry.js';
 import { emitWithinDeadline } from './telemetry.js';
+import { RunObserver } from './observability/run-observer.js';
+import { finishObservedRun, validateObservedTicket } from './observability/lifecycle.js';
 
 /** Resultado completo de un ticket: respuesta pública y datos operativos de su ejecución. */
 export interface SupportRun {
@@ -64,6 +65,7 @@ export async function generateProposal(
     context,
   );
   if (!answer || answer.confidence >= 0.7) return answer;
+  await context.observer.emit('human_review.suggested', { confidence: answer.confidence });
   const actions = answer.actions.filter((action) => action !== HUMAN_REVIEW_ACTION).slice(0, 4);
   return supportResponseSchema.parse({ ...answer, actions: [...actions, HUMAN_REVIEW_ACTION] });
 }
@@ -101,7 +103,7 @@ export async function runSession(
   // requestId correlaciona sus eventos; versiones y hashes identifican la configuración usada.
   // El estado inicial error es provisional: sólo el workflow completado lo cambia a éxito/bloqueo.
   const trace: RunTrace = {
-    requestId: randomUUID(),
+    requestId: process.requestId ?? randomUUID(),
     provider: options.providerName,
     model: options.model,
     promptVersion: options.prompts.version,
@@ -123,15 +125,26 @@ export async function runSession(
     deadline,
     signal,
     settings,
+    observer: new RunObserver(
+      {
+        requestId: trace.requestId,
+        provider: options.providerName,
+        model: options.model,
+        promptVersion: options.prompts.version,
+      },
+      process.observe ?? options.observe,
+      undefined,
+      signal,
+    ),
     budgets: [budget, ...(process.batchBudget ? [process.batchBudget] : [])],
     ...(process.capture ? { capture: process.capture } : {}),
   };
   let failure: AppError | undefined;
   try {
-    const ticket = ticketSchema.safeParse(input);
-    if (!ticket.success) throw new AppError('invalid_input');
+    await context.observer.emit('request.received');
+    const ticket = await validateObservedTicket(input, context.observer);
     signal.throwIfAborted();
-    const result = await workflow(ticket.data, new StructuredExecutor(options), context);
+    const result = await workflow(ticket, new StructuredExecutor(options), context);
     signal.throwIfAborted();
     trace.status = result.status;
     trace.abstained = result.abstained;
@@ -173,5 +186,6 @@ export async function runSession(
         throw new AppError(code, { trace });
       }
     }
+    await finishObservedRun(context);
   }
 }

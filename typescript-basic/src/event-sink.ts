@@ -6,7 +6,8 @@
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { AppError } from './errors.js';
-import type { EventSink } from './telemetry.js';
+import type { TelemetryEvent } from './telemetry.js';
+import type { FlowEvent } from './observability/events.js';
 import { waitForTelemetry } from './telemetry.js';
 
 /**
@@ -23,9 +24,12 @@ import { waitForTelemetry } from './telemetry.js';
  * @param path Archivo opcional. Se abre en append para conservar eventos de ejecuciones anteriores.
  * @returns emit agrega un evento; close espera lo pendiente e intenta cerrar el archivo.
  */
-export async function createEventSink(
+export async function createEventSink<T extends TelemetryEvent | FlowEvent = TelemetryEvent>(
   path?: string,
-): Promise<{ emit: EventSink; close(signal?: AbortSignal): Promise<void> }> {
+): Promise<{
+  emit(event: T, signal?: AbortSignal): Promise<void>;
+  close(signal?: AbortSignal): Promise<void>;
+}> {
   try {
     if (path) await mkdir(dirname(path), { recursive: true });
     // 0o600 solicita lectura/escritura para el propietario en sistemas con permisos Unix.
@@ -33,7 +37,7 @@ export async function createEventSink(
     // Una Promise resuelta permite encadenar también la primera escritura con el mismo mecanismo.
     let pending: Promise<void> = Promise.resolve();
     return {
-      emit(event, signal) {
+      emit(event) {
         const line = `${JSON.stringify(event)}\n`;
         // stderr empieza a escribirse ahora; la cola que sigue ordena los append del archivo.
         // El callback confirma esa escritura o su error, sin usar el booleano de backpressure.
@@ -50,8 +54,9 @@ export async function createEventSink(
         // fallida: el llamador recibe telemetry_error y debe cerrar el sink, no ignorar el fallo.
         pending = pending
           .then(async () => {
-            if (handle)
-              await handle.appendFile(line, { encoding: 'utf8', ...(signal ? { signal } : {}) });
+            // El escritor puede compartirse entre tickets: una cancelación individual no debe
+            // abortar el archivo y envenenar esta cola. El llamador acota su espera por separado.
+            if (handle) await handle.appendFile(line, { encoding: 'utf8' });
             const failure = await outputDone;
             if (failure) throw failure;
           })

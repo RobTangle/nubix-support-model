@@ -12,7 +12,10 @@ import type { LLMProvider, TokenUsage } from './provider-types.js';
 import type { PromptBundle } from './prompts.js';
 import type { RuntimeSettings } from './runtime-settings.js';
 import type { CapturedOutput, EventSink, RunTrace, Stage, AttemptTrace } from './telemetry.js';
-import { emitWithinDeadline } from './telemetry.js';
+import type { FlowSink } from './observability/events.js';
+import type { RunObserver } from './observability/run-observer.js';
+import { AttemptObserver } from './observability/attempt-observer.js';
+import { recordObservedAttempt } from './observability/lifecycle.js';
 
 /** Dependencias compartibles: cliente, prompts, precios y políticas generales del asistente. */
 export interface AssistantOptions {
@@ -23,6 +26,7 @@ export interface AssistantOptions {
   prices: PriceCatalog;
   settings?: Partial<RuntimeSettings>;
   emit?: EventSink;
+  observe?: FlowSink;
 }
 /** Opciones de una corrida concreta; un presupuesto de lote puede abarcar varios tickets de evals. */
 export interface ProcessOptions {
@@ -30,6 +34,8 @@ export interface ProcessOptions {
   batchBudget?: Budget;
   /** Captura explícita para evaluaciones y reportes de testing; no forma parte de la telemetría. */
   capture?: (output: CapturedOutput) => void;
+  observe?: FlowSink;
+  requestId?: string;
 }
 /** Estado de un ticket compartido por sus etapas: deadline es un instante del reloj monotónico. */
 export interface ExecutionContext {
@@ -39,6 +45,7 @@ export interface ExecutionContext {
   budgets: Budget[];
   settings: RuntimeSettings;
   capture?: (output: CapturedOutput) => void;
+  observer: RunObserver;
 }
 
 /**
@@ -96,9 +103,14 @@ export class StructuredExecutor {
       let outcome: T | null = null;
       let failure: AppError | null = null;
       let status = 'valid';
+      const observation = new AttemptObserver(context.observer, stage, attempt);
       try {
         signal.throwIfAborted();
-        const result = await this.options.provider.complete({ ...request, signal });
+        const result = await observation.complete(
+          this.options.provider,
+          { ...request, signal },
+          estimate,
+        );
         usage = result.usage;
         // Capturar antes de validar conserva también JSON inválido o texto truncado para debugging.
         // Este canal contiene texto del modelo y es independiente de los eventos de metadatos.
@@ -108,17 +120,12 @@ export class StructuredExecutor {
           status = 'refused';
         } else {
           if (result.status !== 'completed') throw new AppError('incomplete_output');
-          let value: unknown;
-          try {
-            value = JSON.parse(result.text);
-          } catch {
-            throw new AppError('invalid_output');
-          }
-          const parsed = schema.safeParse(value);
-          if (!parsed.success) throw new AppError('invalid_output');
-          outcome = parsed.data;
+          outcome = await observation.parse(result.text, schema);
         }
       } catch (error) {
+        // Un SDK puede informar consumo al cerrar una solicitud ya cancelada. El decorador
+        // lo conserva en AppError: recuperarlo antes de normalizar el motivo de cancelación.
+        usage = error instanceof AppError ? (error.usage ?? usage) : usage;
         failure = signal.aborted
           ? new AppError(context.signal.aborted ? 'deadline_exceeded' : 'timeout', { usage })
           : error instanceof AppError
@@ -147,24 +154,7 @@ export class StructuredExecutor {
           reservedUnknownUsd: knownCost === null ? estimate : '0',
           usageComplete: cost?.complete ?? false,
         };
-        context.trace.attempts.push(item);
-        context.trace.usageComplete &&= item.usageComplete;
-        if (this.options.emit) {
-          // El payload se construye con campos explícitos para excluir prompts, respuestas y claves.
-          // Esperar el sink permite propagar sus fallos y contabilizar su espera en el plazo total.
-          await emitWithinDeadline(
-            this.options.emit,
-            {
-              event: 'llm_attempt',
-              requestId: context.trace.requestId,
-              provider: this.options.providerName,
-              model: this.options.model,
-              promptVersion: this.options.prompts.version,
-              ...item,
-            },
-            context.signal,
-          );
-        }
+        await recordObservedAttempt(this.options, context, item, usage);
       }
       // El consumo real puede superar la reserva: detener incluso antes de publicar éxito.
       for (const budget of context.budgets) budget.check('0');
@@ -176,6 +166,7 @@ export class StructuredExecutor {
       )
         throw failure;
       repair = failure.code === 'invalid_output';
+      await observation.retry(failure.code);
       if (!repair)
         await sleep(
           Math.min(100 + Math.random() * 100, Math.max(0, context.deadline - performance.now())),

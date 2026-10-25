@@ -104,6 +104,22 @@ test('CLI publica sólo JSON y encuentra su YAML fuera del repositorio', () => {
   });
 });
 
+test('CLI --flow-events agrega timestamps sin mezclar contenido con la telemetría', () => {
+  const result = run(['--text', 'TICKET PRIVADO DE OBSERVABILIDAD', '--flow-events']);
+  assert.equal(result.status, 0, result.stderr);
+  const events = result.stderr
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  const flow = events.filter((event) => event.schemaVersion === 1);
+  assert.equal(flow[0].event, 'request.received');
+  assert.equal(flow.at(-1).event, 'run.completed');
+  assert.equal(flow.filter((event) => event.event === 'llm.request.started').length, 3);
+  assert.ok(flow.every((event) => !Number.isNaN(Date.parse(event.timestamp))));
+  assert.doesNotMatch(JSON.stringify(events), /TICKET PRIVADO DE OBSERVABILIDAD|systemPrompt/);
+  assert.equal(JSON.parse(result.stdout).category, 'billing');
+});
+
 test('stdin conserva Unicode y recibe una sola consulta', () => {
   const result = run(['--stdin'], 'Cargo en mi suscripción 👩‍💻\n');
   assert.equal(result.status, 0, result.stderr);

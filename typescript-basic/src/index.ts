@@ -16,4 +16,6 @@ export type { PromptBundle, PromptVersion } from './prompts.js';
 export type { AssistantOptions, ProcessOptions, SupportRun } from './service.js';
 export type { RunTrace, EventSink } from './telemetry.js';
 export { Budget, PriceCatalog, loadPrices } from './budget.js';
+export { flowEventSchema } from './observability/events.js';
+export type { FlowEvent, FlowSink } from './observability/events.js';
 export { readRuntimeSettings } from './runtime-settings.js';

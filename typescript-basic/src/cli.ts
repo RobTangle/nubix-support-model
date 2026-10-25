@@ -17,6 +17,8 @@ import { ticketSchema, type SupportResponse } from './schemas.js';
 import { SupportAssistant } from './service.js';
 import { RunReportWriter } from './run-reports/writer.js';
 import type { CapturedOutput, RunTrace } from './telemetry.js';
+import type { TelemetryEvent } from './telemetry.js';
+import type { FlowEvent } from './observability/events.js';
 
 const help = `Nubbix didáctico en TypeScript: clasificar y proponer una respuesta.
 Uso: nubbix-support-ts (--text "Consulta" | --stdin) [--provider openai|xai|google-ai]
@@ -27,6 +29,7 @@ Opciones:
   --env-file   Archivo de variables; por defecto, .env en la raíz del repositorio.
   --prompt-version basic-v1 (predeterminado) o basic-v2, con ejemplos few-shot.
   --telemetry-file Archivo JSONL opcional, además de stderr.
+  --flow-events Emitir también los eventos finos de ejecución con timestamps.
   --reports-dir Directorio de JSONs por ejecución; por defecto, reports/manual-tests del proyecto TS.
   --help       Mostrar esta ayuda sin usar credenciales ni llamar al proveedor.
 `;
@@ -62,6 +65,7 @@ async function main(): Promise<void> {
         'env-file': { type: 'string' },
         'prompt-version': { type: 'string', default: 'basic-v1' },
         'telemetry-file': { type: 'string' },
+        'flow-events': { type: 'boolean' },
         'reports-dir': { type: 'string' },
         help: { type: 'boolean' },
       },
@@ -113,7 +117,7 @@ async function main(): Promise<void> {
   try {
     // El sink recibe sólo eventos operativos; process().capture conserva texto para el reporte.
     // Separar ambos destinos permite redirigir stderr sin mezclar contenido privado ni stdout.
-    sink = await createEventSink(parsedArgs.values['telemetry-file']);
+    sink = await createEventSink<TelemetryEvent | FlowEvent>(parsedArgs.values['telemetry-file']);
     const assistant = new SupportAssistant({
       provider: createProvider(settings),
       providerName: settings.provider,
@@ -122,6 +126,7 @@ async function main(): Promise<void> {
       prices,
       settings: runtimeSettings,
       emit: sink.emit,
+      ...(parsedArgs.values['flow-events'] ? { observe: sink.emit } : {}),
     });
     const result = await assistant.process(ticket.data, {
       signal: controller.signal,
