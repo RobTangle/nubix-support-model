@@ -4,6 +4,29 @@ CLI en Python que clasifica consultas de soporte y propone una respuesta para un
 
 **Estado:** proyecto educativo con un manual ficticio de Nubbix. Las pruebas de software funcionan sin claves. La calidad de los modelos y la elección del mejor prompt requieren ejecutar las evals reales y revisar sus resultados; todavía no hay un ganador demostrado.
 
+## Tres versiones para aprender y comparar
+
+El proyecto Python instala dos paquetes; el espejo TypeScript tiene su propio proyecto npm:
+
+| Versión | Paquete importable | Comando | Objetivo |
+|---|---|---|---|
+| Didáctica | `nubbix_support_basic` | `nubbix-support-basic` | Entender clasificación y respuesta con una llamada y cuatro clases pequeñas. |
+| Completa | `nubbix_support` | `nubbix-support` | Estudiar moderación, presupuestos, telemetría y evaluaciones. |
+| TypeScript con controles completos | `typescript-basic/` | `node dist/cli.js`, `node dist/eval-cli.js` | Estudiar Zod, moderación, presupuestos, telemetría y evals en un servicio async. |
+
+Si recién empezás con Python o AI Engineering, comenzá por la [guía de la versión didáctica y comparación](docs/basic-version.md). Tiene su propio flujo y prompt; comparte únicamente adaptadores e interfaces de transporte con la completa. Ambas utilizan el mismo entorno y las mismas variables de claves/modelos. La básica no aplica los presupuestos monetarios de la completa y no reemplaza sus controles para un piloto con clientes.
+
+Si ya conocés TypeScript, tenés la [implementación con CLI y Zod](typescript-basic/README.md), una [guía comparando cada parte con Python](docs/typescript-python-guide.md) y la [guía de evals TypeScript](docs/typescript-evaluations.md). Conserva el directorio `typescript-basic`, pero ahora incluye los controles del flujo completo: tres etapas, intentos acotados, presupuesto, telemetría y evaluación. Usa Node.js 24+ y un lockfile propio. `basic-v1` conserva el prompt Python básico y `basic-v2` agrega ejemplos; el manual de Python completo es diferente. No hay servidor HTTP implementado ni un ganador de prompt medido todavía.
+
+```powershell
+uv sync --locked
+uv run nubbix-support-basic --help
+# El siguiente comando requiere una clave configurada y consume saldo del proveedor.
+uv run nubbix-support-basic --text "Me cobraron dos veces este mes" --provider openai
+```
+
+Las instrucciones que siguen describen la versión completa.
+
 ## Empezar
 
 Necesitás Python 3.12 o superior y [uv](https://docs.astral.sh/uv/getting-started/installation/). En Windows podés instalar Python desde [python.org](https://www.python.org/downloads/windows/) y uv con `winget install --id=astral-sh.uv -e`. Cerrá y abrí la terminal después de instalarlos.

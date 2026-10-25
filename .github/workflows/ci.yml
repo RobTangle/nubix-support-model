@@ -8,6 +8,29 @@ permissions:
   contents: read
 
 jobs:
+  typescript:
+    name: TypeScript / Node 24 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: typescript-basic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: typescript-basic/package-lock.json
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run check
+      - run: npm test
+      - run: npm pack --dry-run
+      - run: npm run smoke:package
   verify:
     name: Python 3.12 / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -68,6 +91,8 @@ jobs:
               smoke = (
                   "from nubbix_support.prompts import PromptRepository; "
                   "from nubbix_support.budget import load_prices; "
+                  "from nubbix_support_basic.service import load_prompt; "
+                  "assert 'MANUAL FICTICIO' in load_prompt(); "
                   "prompts = PromptRepository(); "
                   "assert prompts.support('v1'); "
                   "assert prompts.load('v2').examples; "
@@ -76,6 +101,12 @@ jobs:
               )
               subprocess.run(
                   [str(interpreter), "-I", "-c", smoke, "--help"],
+                  cwd=destination,
+                  env=environment,
+                  check=True,
+              )
+              subprocess.run(
+                  [str(interpreter), "-I", "-m", "nubbix_support_basic", "--help"],
                   cwd=destination,
                   env=environment,
                   check=True,
