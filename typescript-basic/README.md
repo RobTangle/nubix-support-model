@@ -38,7 +38,38 @@ node dist/cli.js --text "Necesito una factura" --provider openai
 
 La CLI directa publica sólo la respuesta de cuatro campos en stdout. Los eventos JSONL y errores sanitizados van a stderr; un error operativo termina con código 2. `--telemetry-file` agrega un destino JSONL asíncrono. Los eventos contienen metadatos, tokens, costo, latencia y estados; excluyen tickets, prompts, respuestas y claves. Hay un evento por intento y un resumen final incluso ante fallo. npm puede agregar mensajes propios a stdout: para integrar procesos usá `node dist/cli.js`.
 
-`actions` contiene sugerencias; no ejecuta cambios. `confidence` es autodeclarada, no calibrada. No hay servidor HTTP ni selección automática de proveedor o prompt. No hay resultados live ni un ganador de calidad demostrado todavía.
+`actions` contiene sugerencias; no ejecuta cambios. `confidence` es autodeclarada, no calibrada. El panel HTTP local permite seleccionar proveedor y prompt explícitamente. No hay selección automática ni un ganador de calidad demostrado todavía.
+
+## Panel en vivo: Nubbix Flow Lab
+
+```powershell
+# Modo DEMO predeterminado: no lee claves ni llama a APIs de modelos.
+npm run web
+```
+
+Abrí **http://127.0.0.1:3000**. Elegí un ticket, proveedor y versión de prompt, y ejecutalo. Los eventos aparecen mientras el backend procesa la consulta, con actor **LLM / CÓDIGO**, timestamp UTC, tiempo desde inicio, diferencia con el evento anterior, duración cuando corresponde y detalles desplegables. La animación de una request se mantiene hasta recibir su finalización o fallo. No se simula un porcentaje de progreso.
+
+El modo demo recorre el mismo `SupportAssistant` con un proveedor de prueba que demora cada llamada. Los conteos y costos son simulados, identificados como tales: no prueban calidad ni latencia del proveedor real. El ejemplo **Bloqueo demo** envía `DEMO_BLOCK` y permite ver cómo la primera moderación corta las llamadas restantes.
+
+```powershell
+# Modo LIVE: usa únicamente claves configuradas en el servidor y consume saldo real.
+npm run web:live
+
+# Después del build: elegir puerto, archivo de entorno o destino de logs.
+node dist/web/server.js --port 3001 --live --env-file ../.env --telemetry-file reports/web-events.jsonl
+```
+
+Para inspeccionar los mismos eventos finos desde la CLI, agregá `--flow-events`. El JSON público de stdout conserva sus cuatro campos; los eventos van a stderr y al archivo opcional:
+
+```powershell
+node dist/cli.js --provider google-ai --text "Necesito una factura" --flow-events --telemetry-file reports/flow.jsonl
+```
+
+El panel sirve como herramienta local de aprendizaje. Se vincula sólo a loopback, valida Host/Origin y limita el cuerpo HTTP a 128 KiB y el ticket a 8000 puntos Unicode. Admite cuatro ejecuciones simultáneas por proceso; si está ocupado responde 429. Cancelar o cerrar la conexión propaga la señal al servicio. No tiene autenticación multiusuario, historial persistente ni recuperación de una ejecución tras recargar; no está diseñado para exponerse directamente en Internet.
+
+Los eventos incluyen sólo metadatos. **No se envían claves, prompts ni propuestas sin moderar al navegador.** La respuesta se entrega en un frame terminal después del flujo de seguridad. A diferencia de la CLI, el panel no crea automáticamente los archivos de pruebas manuales con contenido; podés guardar la telemetría con `--telemetry-file`.
+
+Leé el [recorrido de observabilidad y HTTP](../docs/live-observability.md) para entender las clases, los contratos y los límites de esta primera versión.
 
 ## Archivo de pruebas manuales
 
@@ -159,6 +190,7 @@ src/
   resources/         Manual, seguridad y ejemplos few-shot
   budget.ts          Budget, Price y PriceCatalog con decimales
   telemetry.ts       Contratos de eventos y trazas sin contenido
+  observability/     Eventos finos, RunObserver e instrumentación por intento
   event-sink.ts      stderr y archivo JSONL opcional
   config.ts          Configuración explícita y lectura de .env
   runtime-settings.ts Límites de tiempo, tokens y dinero
@@ -167,11 +199,14 @@ src/
   cli.ts             Entrada por terminal; composition root
   eval-cli.ts        Comandos live y offline de evaluación
   evals/             Dataset, métricas, revisión, comparación y reportes
+  web/               Express, contratos HTTP, modo demo y frontend TypeScript
   index.ts           API importable sin ejecutar la CLI
 tests/               Contratos, políticas, SDK simulados, CLI, evals y concurrencia
 ```
 
 `npm test` construye primero `dist`, incluidos los recursos, y ejecuta pruebas offline. `npm run check` revisa tipos del código y tests. `predev` prepara los recursos antes de `npm run dev`. El build copia también los datasets y precios canónicos de Python a `dist/resources/shared`; la ejecución TS compilada no invoca Python. El lockfile fija dependencias: usá `npm ci`. OpenAI está fijado a `7.43.0`, xAI a `0.2.5` y `decimal.js` a `10.6.0`; este SDK de xAI es experimental. El adaptador rechaza `XAI_DEBUG=1` porque habilitarlo podría registrar datos privados; OpenAI fuerza logging desactivado.
+
+El build también usa esbuild para generar el módulo de navegador y copia HTML/CSS a `dist/web/public`. Express sirve esos recursos relativos al módulo compilado, por lo que el panel empaquetado funciona desde otro directorio. El frontend no importa configuración de entorno ni clientes SDK.
 
 Podés importar `SupportAssistant`, `createProvider`, `readSettings`, `loadPrompts` y `loadPrices` desde `dist/index.js`. El constructor recibe `{provider, providerName, model, prompts, prices, settings?, emit?}`. `respond(input, signal?)` devuelve la respuesta pública; `process(input, options?)` devuelve `{response, trace}` para un consumidor que necesita metadatos. `loadPrompt()` se conserva como alias para inspeccionar el texto de generación. El cliente y los prompts se construyen al iniciar una aplicación; el estado de cada ticket queda local a su invocación.
 

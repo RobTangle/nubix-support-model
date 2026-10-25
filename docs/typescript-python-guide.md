@@ -89,7 +89,7 @@ sequenceDiagram
 
 **La CLI prepara la aplicación.** `parseArgs()` interpreta `--text`, `--stdin`, `--provider`, `--env-file`, `--prompt-version` y `--telemetry-file`. Si falta texto o supera el límite, falla antes de construir el cliente. `readEnvironment()` lee `.env` una vez; `readSettings()` exige únicamente la clave seleccionada. `createProvider()` construye el adaptador, `loadPrompts()` carga el contexto, `loadPrices()` valida el catálogo y `createEventSink()` prepara la telemetría. Esta composición explícita cumple el papel que podrías dar a un módulo de Nest, con menos infraestructura para este tamaño de app.
 
-**`SupportAssistant` ejecuta el caso de uso.** Recibe un objeto de dependencias y lo guarda en una propiedad `private readonly`. Equivale a recibirlas en `__init__` y guardarlas como atributos Python, aunque `readonly` es una restricción estática, no una congelación profunda del objeto. `respond(input: unknown)` delega en `process()` y vuelve a validar el ticket: la lógica también debe estar protegida cuando la invoque una futura ruta HTTP u otro programa sin pasar por la CLI. Esa segunda validación es barata y está puesta en un límite de confianza diferente. `respond()` entrega sólo los cuatro campos públicos; `process()` devuelve `{response, trace}` para evaluaciones u otros consumidores de metadatos.
+**`SupportAssistant` ejecuta el caso de uso.** Recibe un objeto de dependencias y lo guarda en una propiedad `private readonly`. Equivale a recibirlas en `__init__` y guardarlas como atributos Python, aunque `readonly` es una restricción estática, no una congelación profunda del objeto. `respond(input: unknown)` delega en `process()` y vuelve a validar el ticket: la lógica también debe estar protegida cuando la invoque la ruta HTTP u otro programa sin pasar por la CLI. Esa segunda validación es barata y está puesta en un límite de confianza diferente. `respond()` entrega sólo los cuatro campos públicos; `process()` devuelve `{response, trace}` para evaluaciones u otros consumidores de metadatos.
 
 **El contexto y los datos van separados.** El system prompt contiene taxonomía, manual ficticio y reglas. El mensaje de usuario contiene `{"ticket":"Me cobraron dos veces este mes"}`. Serializar como JSON evita construir delimitadores a mano; no elimina por sí mismo la posibilidad de prompt injection. El asistente no tiene herramientas ni acceso para ejecutar cambios.
 
@@ -106,7 +106,7 @@ sequenceDiagram
 }
 ```
 
-**La CLI publica el contrato.** Escribe la respuesta en stdout y conecta un sink que recibe eventos de cada intento y un resumen final en stderr, opcionalmente también en un archivo JSONL. El servicio recibe el sink por inyección: no necesita acceder a la terminal. Los eventos normales contienen sólo metadatos, sin tickets, prompts, respuestas ni claves. `AppError` tiene códigos y mensajes estáticos: no adjunta el error crudo del SDK. Una futura ruta HTTP podrá convertir esos mismos códigos a estados HTTP sin cambiar el asistente.
+**La CLI publica el contrato.** Escribe la respuesta en stdout y conecta un sink que recibe eventos de cada intento y un resumen final en stderr, opcionalmente también en un archivo JSONL. `--flow-events` agrega el ciclo de vida detallado. El servicio recibe el sink por inyección: no necesita acceder a la terminal. Los eventos normales contienen sólo metadatos, sin tickets, prompts, respuestas ni claves. `AppError` tiene códigos y mensajes estáticos: no adjunta el error crudo del SDK. Express consume el mismo servicio y comunica errores posteriores al inicio del stream mediante un frame terminal.
 
 **Cada llamada compromete presupuesto.** `Budget` reserva una estimación antes de llamar y concilia después con los tokens recibidos. Si el uso o desglose de caché es desconocido, conserva la reserva; desconocido no significa gratis. `Price` calcula con `decimal.js`, evitando errores de representación monetaria binaria. El presupuesto predeterminado de USD `0.05` cubre todas las etapas e intentos del ticket, y el de USD `5` se comparte en la corrida de evals. Son controles locales estimados, no una garantía de la factura final. El catálogo de precios es una instantánea fechada 2026-10-23; no implica haber vuelto a verificar sus tarifas hoy.
 
@@ -116,16 +116,16 @@ sequenceDiagram
 
 `Ticket`, `SupportResponse` y `ProviderSettings` son tipos inferidos de esquemas en TS; no necesitan clases vacías. En Python son clases Pydantic porque esa biblioteca organiza así la validación. Las interfaces TS `LLMProvider`/`CompletionRequest`/`CompletionResult` se parecen a `Protocol` y a los objetos de transporte Python: expresan qué necesita el consumidor. La compatibilidad es estructural, sin exigir una jerarquía de herencia.
 
-`readSettings`, `createProvider` y `loadPrompts` son funciones porque no necesitan conservar estado propio entre consultas. No incorporamos contenedor de DI, Nest ni Express todavía: no añaden claridad al recorrido que estamos estudiando. La separación entre transporte, servicio y proveedor sí tiene un beneficio inmediato para tests y reutilización.
+`readSettings`, `createProvider` y `loadPrompts` son funciones porque no necesitan conservar estado propio entre consultas. No incorporamos contenedor de DI ni Nest. Express se agregó como adaptador HTTP local para el panel de observabilidad; sus responsabilidades quedan fuera del servicio. La separación entre transporte, servicio y proveedor permite reutilizar el flujo y sus tests.
 
-## 5. Async, varias requests y el futuro HTTP
+## 5. Async, varias requests y HTTP
 
 La CLI es un adaptador de entrada válido: el mismo caso de uso puede llamarse desde una terminal, una ruta HTTP o un consumidor de cola. Lo que impediría reutilizarlo sería que `respond()` leyera stdin, llamara a `process.exit()` o guardara un ticket mutable en `this`. No hace esas cosas.
 
 `respond()` devuelve `Promise<SupportResponse>`. Cuando espera al proveedor mediante `await`, Node puede atender otras operaciones de I/O. Los datos del ticket, la respuesta y su señal son variables locales por invocación. Compartir una instancia no implica compartir esos datos. Hay un test con diez llamadas simultáneas y respuestas distinguibles, además de otro que cancela una sin interrumpir la otra.
 
 ```typescript
-// Inicialización de una futura app: una vez por proceso.
+// Inicialización de una app: una vez por proceso.
 const settings = readSettings("openai", environment);
 const provider = createProvider(settings);
 const assistant = new SupportAssistant({
@@ -135,7 +135,7 @@ const assistant = new SupportAssistant({
   prompts: await loadPrompts("basic-v1"),
   prices: await loadPrices(),
 });
-// Dentro de una futura ruta: una vez por request.
+// Dentro de una ruta: una vez por request.
 const response = await assistant.respond(requestBody, requestAbortSignal);
 ```
 
@@ -143,7 +143,7 @@ const response = await assistant.respond(requestBody, requestAbortSignal);
 
 La básica Python tiene hoy un método síncrono. Si se usa tal cual en una futura API async, debe ejecutarse en un endpoint síncrono gestionado por threads o en un worker de threads; su adaptador OpenAI usa `asyncio.run()`, que no se puede anidar en un event loop activo. Otra opción es introducir una interfaz async de proveedor y servicio. La versión TS nace async por las convenciones de sus SDK; no sería útil copiar esa fachada síncrona sólo para hacerlas iguales.
 
-Diez operaciones concurrentes contra un doble de test prueban aislamiento, **no** una capacidad de diez requests por segundo en producción. El throughput depende de latencia, cuotas, tokens y recursos. Por ejemplo, sostener 10 requests/s con 2 s de latencia promedio supone unas 20 consultas en vuelo, antes de considerar límites y picos. Al agregar Express habrá que decidir límite de tamaño HTTP, autenticación, concurrencia admitida, colas o rechazos por saturación, rate limiting y cancelación al desconectarse. Las pruebas de carga y costos reales requieren una configuración controlada; un `Promise.all()` ilimitado no resuelve la sobrecarga.
+Diez operaciones concurrentes contra un doble de test prueban aislamiento, **no** una capacidad de diez requests por segundo en producción. El throughput depende de latencia, cuotas, tokens y recursos. Por ejemplo, sostener 10 requests/s con 2 s de latencia promedio supone unas 20 consultas en vuelo, antes de considerar límites y picos. El panel Express local limita tamaño HTTP y cuatro ejecuciones concurrentes, rechaza saturación y cancela al desconectarse. No implementa autenticación multiusuario ni cuotas globales para un servicio público. Las pruebas de carga y costos reales requieren una configuración controlada; un `Promise.all()` ilimitado no resuelve la sobrecarga. La [guía de observabilidad](live-observability.md) explica sus eventos y frontend.
 
 ## 6. Qué verificamos y qué falta medir
 
