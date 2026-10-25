@@ -7,6 +7,7 @@ import type { ProcessOptions, SupportRun } from '../support/service.js';
 import type { FlowSink } from '../observability/events.js';
 import { inspectionEntrySchema, type InspectionEntry } from '../inspection/contracts.js';
 import type { LabStore } from '../lab/storage.js';
+import { labHistoryQuerySchema } from '../lab/contracts.js';
 import type { LabEvaluationService } from '../lab/evaluations.js';
 import { evaluationRoutes } from './evaluation-routes.js';
 import { RequestTracker } from './request-tracker.js';
@@ -79,15 +80,22 @@ export function createApp(options: WebApplicationOptions) {
     }
     next();
   });
+
   app.use(express.json({ limit: '128kb', strict: true }));
   if (options.evaluations) app.use('/api/evaluations', evaluationRoutes(options.evaluations));
+
   app.get('/api/config', (_request, response) => {
     response.json(configuration);
   });
+
   app.get('/api/history', (request, response) => {
-    const parsed = z
-      .strictObject({
-        kind: z.enum(['support', 'evaluation']).optional(),
+    const parsed = labHistoryQuerySchema
+      .extend({
+        // z.coerce.boolean convertiría "false" en true: HTTP admite sólo estos literales.
+        includeEvaluationCases: z
+          .enum(['true', 'false'])
+          .transform((value) => value === 'true')
+          .optional(),
         limit: z
           .string()
           .regex(/^\d+$/u)
@@ -101,6 +109,7 @@ export function createApp(options: WebApplicationOptions) {
           .pipe(z.number().int().min(0).max(1_000_000))
           .optional(),
       })
+      .pipe(labHistoryQuerySchema)
       .safeParse(request.query);
     if (!parsed.success) {
       response.status(400).json(publicError(new AppError('invalid_input')));
@@ -108,16 +117,17 @@ export function createApp(options: WebApplicationOptions) {
     }
     try {
       response.json(
-        options.store?.listRuns({
-          ...(parsed.data.kind ? { kind: parsed.data.kind } : {}),
-          ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
-          ...(parsed.data.offset !== undefined ? { offset: parsed.data.offset } : {}),
-        }) ?? { items: [], total: 0 },
+        options.store?.listRuns(parsed.data) ?? {
+          items: [],
+          total: 0,
+          filterOptions: { providers: [], promptVersions: [] },
+        },
       );
     } catch {
       response.status(503).json(publicError(new AppError('report_error')));
     }
   });
+
   app.get('/api/history/:id', (request, response) => {
     try {
       const id = z.uuid().safeParse(request.params.id);
@@ -133,6 +143,7 @@ export function createApp(options: WebApplicationOptions) {
       response.status(503).json(publicError(new AppError('report_error')));
     }
   });
+
   app.post('/api/support/stream', async (request, response) => {
     const parsed = webRequestSchema.safeParse(request.body);
     if (
@@ -285,12 +296,14 @@ export function createApp(options: WebApplicationOptions) {
       finishRequest();
     }
   });
+
   app.use(
     express.static(fileURLToPath(new URL('./public/', import.meta.url)), {
       dotfiles: 'deny',
       index: 'index.html',
     }),
   );
+
   app.use((_request, response) => {
     response.status(404).json({ error: { code: 'not_found', message: 'Recurso no encontrado.' } });
   });
@@ -298,6 +311,8 @@ export function createApp(options: WebApplicationOptions) {
     const tooLarge = error instanceof Error && 'type' in error && error.type === 'entity.too.large';
     response.status(tooLarge ? 413 : 400).json(publicError(new AppError('invalid_input')));
   };
+
   app.use(errorHandler);
+
   return Object.assign(app, { drain: () => requests.drain() });
 }

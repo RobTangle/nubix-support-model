@@ -19,6 +19,52 @@ const input = () => ({
   input: { text: '  Factura original  ' },
 });
 
+test('SQLite historial: excluye casos por defecto y combina filtros antes de paginar', () => {
+  const store = new LabStore(':memory:');
+  const job = { ...input(), kind: 'evaluation' as const };
+  const standalone = input();
+  const historical = {
+    ...input(),
+    provider: 'google-ai',
+    promptVersion: 'retired-v0',
+    mode: 'live' as const,
+  };
+  const child = { ...input(), parentId: job.id };
+  try {
+    for (const run of [job, standalone, historical, child]) store.createRun(run);
+    store.finishRun(historical.id, { status: 'failed' });
+    assert.equal(store.listRuns({ kind: 'support' }).total, 2);
+    assert.equal(store.listRuns({ kind: 'support', includeEvaluationCases: true }).total, 3);
+    const filtered = store.listRuns({
+      kind: 'support',
+      provider: 'google-ai',
+      promptVersion: 'retired-v0',
+      mode: 'live',
+      status: 'failed',
+      limit: 1,
+    });
+    assert.deepEqual(
+      filtered.items.map((row) => row.id),
+      [historical.id],
+    );
+    assert.equal(filtered.total, 1);
+    assert.equal(store.listRuns({ kind: 'support', provider: 'google-ai', offset: 1 }).total, 1);
+    assert.equal(
+      store.listRuns({ kind: 'support', provider: 'google-ai', offset: 1 }).items.length,
+      0,
+    );
+    assert.equal(store.listRuns({ kind: 'support', promptVersion: "' OR 1=1 --" }).total, 0);
+    assert.deepEqual(filtered.filterOptions, {
+      providers: ['google-ai', 'openai'],
+      promptVersions: ['basic-v1', 'retired-v0'],
+    });
+    assert.equal(store.listRuns({ kind: 'evaluation' }).total, 1);
+    assert.equal(store.getRun(child.id)!.parentId, job.id);
+  } finally {
+    store.close();
+  }
+});
+
 test('SQLite: persiste, pagina y separa eventos e inspecciones por corrida', () => {
   const directory = mkdtempSync(join(tmpdir(), 'lab-store-'));
   const path = join(directory, 'lab.sqlite');

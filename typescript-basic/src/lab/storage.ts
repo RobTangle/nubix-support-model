@@ -11,8 +11,12 @@ import {
   labJsonSchema,
   labRunDetailSchema,
   labRunSummarySchema,
+  labHistoryQuerySchema,
+  labHistoryOptionsSchema,
   type LabRunDetail,
   type LabRunSummary,
+  type LabHistoryQuery,
+  type LabHistoryOptions,
 } from './contracts.js';
 
 const createRunSchema = labRunSummarySchema
@@ -23,14 +27,8 @@ const finishRunSchema = z.strictObject({
   result: labJsonSchema.nullable().optional(),
   error: labErrorSchema.nullable().optional(),
 });
-const paginationSchema = z.strictObject({
-  kind: z.enum(['support', 'evaluation']).optional(),
-  limit: z.number().int().min(1).max(100).default(30),
-  offset: z.number().int().min(0).max(1_000_000).default(0),
-});
 type CreateRunInput = Omit<z.input<typeof createRunSchema>, 'input'> & { input: unknown };
 type FinishRunInput = Omit<z.input<typeof finishRunSchema>, 'result'> & { result?: unknown };
-type ListRunsInput = z.input<typeof paginationSchema>;
 
 /** SQLite local: operaciones breves, contratos validados y errores sin contenido del disco. */
 export class LabStore {
@@ -218,20 +216,50 @@ export class LabStore {
     });
   }
 
-  listRuns(input: ListRunsInput = {}): { items: LabRunSummary[]; total: number } {
+  listRuns(input: LabHistoryQuery = {}): {
+    items: LabRunSummary[];
+    total: number;
+    filterOptions: LabHistoryOptions;
+  } {
     return this.operation(() => {
-      const parsed = paginationSchema.parse(input);
+      const parsed = labHistoryQuerySchema.parse(input);
+      const conditions: string[] = [];
+      const parameters: string[] = [];
+      if (!parsed.includeEvaluationCases) conditions.push('parent_id IS NULL');
+      // Sólo estos nombres de columna son código; todos los valores externos son parámetros SQL.
+      for (const [column, value] of [
+        ['kind', parsed.kind],
+        ['provider', parsed.provider],
+        ['prompt_version', parsed.promptVersion],
+        ['status', parsed.status],
+        ['mode', parsed.mode],
+      ] as const) {
+        if (value !== undefined) {
+          conditions.push(`${column} = ?`);
+          parameters.push(value);
+        }
+      }
+      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
       const rows = this.database
-        .prepare(
-          'SELECT * FROM runs WHERE (? IS NULL OR kind = ?) ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
-        )
-        .all(parsed.kind ?? null, parsed.kind ?? null, parsed.limit, parsed.offset);
+        .prepare(`SELECT * FROM runs ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+        .all(...parameters, parsed.limit, parsed.offset);
       const total = this.database
-        .prepare('SELECT COUNT(*) AS total FROM runs WHERE (? IS NULL OR kind = ?)')
-        .get(parsed.kind ?? null, parsed.kind ?? null)!['total'];
+        .prepare(`SELECT COUNT(*) AS total FROM runs ${where}`)
+        .get(...parameters)!['total'];
       return {
         items: rows.map((row) => this.summary(row)),
         total: z.number().int().nonnegative().parse(total),
+        // Opciones globales y estables: un filtro activo no hace desaparecer otras versiones históricas.
+        filterOptions: labHistoryOptionsSchema.parse({
+          providers: this.database
+            .prepare('SELECT DISTINCT provider FROM runs ORDER BY provider')
+            .all()
+            .map((row) => row['provider']),
+          promptVersions: this.database
+            .prepare('SELECT DISTINCT prompt_version FROM runs ORDER BY prompt_version')
+            .all()
+            .map((row) => row['prompt_version']),
+        }),
       };
     });
   }

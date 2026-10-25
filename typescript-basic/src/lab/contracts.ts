@@ -27,9 +27,30 @@ export const labRunDetailSchema = labRunSummarySchema.extend({
   events: z.array(flowEventSchema).max(4096),
   inspections: z.array(inspectionEntrySchema).max(512),
 });
+/** Filtros de lectura: no dependen del registro actual de prompts ni habilitan ejecuciones. */
+export const labHistoryFiltersSchema = z.strictObject({
+  includeEvaluationCases: z.boolean().default(false),
+  provider: labRunSummarySchema.shape.provider.optional(),
+  promptVersion: labRunSummarySchema.shape.promptVersion.optional(),
+  status: labRunSummarySchema.shape.status.optional(),
+  mode: labRunSummarySchema.shape.mode.optional(),
+});
+export const labHistoryQuerySchema = labHistoryFiltersSchema.extend({
+  kind: labRunSummarySchema.shape.kind.optional(),
+  limit: z.number().int().min(1).max(100).default(30),
+  offset: z.number().int().min(0).max(1_000_000).default(0),
+});
+export const labHistoryOptionsSchema = z.strictObject({
+  providers: z.array(labRunSummarySchema.shape.provider),
+  promptVersions: z.array(labRunSummarySchema.shape.promptVersion),
+});
 export const labRunListSchema = z.strictObject({
   items: z.array(labRunSummarySchema),
   total: z.number().int().nonnegative(),
+  filterOptions: labHistoryOptionsSchema.default({ providers: [], promptVersions: [] }),
 });
+export type LabHistoryFilters = z.input<typeof labHistoryFiltersSchema>;
+export type LabHistoryQuery = z.input<typeof labHistoryQuerySchema>;
+export type LabHistoryOptions = z.infer<typeof labHistoryOptionsSchema>;
 export type LabRunSummary = z.infer<typeof labRunSummarySchema>;
 export type LabRunDetail = z.infer<typeof labRunDetailSchema>;

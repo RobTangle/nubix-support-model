@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -17,6 +18,68 @@ const configuration = {
   maxConcurrent: 1,
 };
 const body = { text: '  Factura original  ', provider: 'openai', promptVersion: 'basic-v1' };
+
+test('HTTP historial: filtros validados, separación por defecto y acceso directo a casos', async () => {
+  const store = new LabStore(':memory:');
+  const base = {
+    kind: 'support' as const,
+    mode: 'live' as const,
+    provider: 'openai',
+    model: 'fixture',
+    promptVersion: 'basic-v1',
+    input: {},
+  };
+  const job = store.createRun({ ...base, id: randomUUID(), kind: 'evaluation' });
+  const manual = store.createRun({
+    ...base,
+    id: randomUUID(),
+    promptVersion: 'old-v0',
+    provider: 'google-ai',
+  });
+  const child = store.createRun({ ...base, id: randomUUID(), parentId: job.id });
+  store.finishRun(manual.id, { status: 'failed' });
+  let modelCalls = 0;
+  const { server, url } = await launch(() => {
+    modelCalls++;
+    throw new Error('No debe ejecutar soporte');
+  }, store);
+  try {
+    const page = await (await fetch(`${url}/api/history?kind=support`)).json();
+    assert.deepEqual(
+      page.items.map((row: { id: string }) => row.id),
+      [manual.id],
+    );
+    const filtered = await (
+      await fetch(
+        `${url}/api/history?kind=support&includeEvaluationCases=false&provider=google-ai&promptVersion=old-v0&status=failed&mode=live&limit=1&offset=1`,
+      )
+    ).json();
+    assert.equal(filtered.total, 1);
+    assert.deepEqual(filtered.items, []);
+    assert.ok(filtered.filterOptions.promptVersions.includes('old-v0'));
+    assert.equal(
+      (await (await fetch(`${url}/api/history?kind=support&includeEvaluationCases=true`)).json())
+        .total,
+      2,
+    );
+    assert.equal((await (await fetch(`${url}/api/history/${child.id}`)).json()).parentId, job.id);
+    for (const query of [
+      'includeEvaluationCases=1',
+      'includeEvaluationCases=false&includeEvaluationCases=true',
+      'status=unknown',
+      'mode=unknown',
+      'provider=',
+      'promptVersion=',
+      'unknown=true',
+    ])
+      assert.equal((await fetch(`${url}/api/history?${query}`)).status, 400, query);
+    assert.equal(modelCalls, 0);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.close();
+  }
+});
 
 test('cierre HTTP: espera cancelación y persiste consumo tardío antes de cerrar SQLite', async () => {
   const store = new LabStore(':memory:');
