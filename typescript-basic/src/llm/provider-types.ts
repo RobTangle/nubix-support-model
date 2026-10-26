@@ -6,6 +6,11 @@
 /** Una solicitud al modelo con instrucciones, contenido, contrato de salida y límite de tokens. */
 export interface CompletionRequest {
   readonly systemPrompt: string;
+  /**
+   * Contenido textual enviado como mensaje de usuario: texto libre o datos serializados como JSON.
+   * El flujo llamador decide su formato y valida los datos; el adaptador lo transmite sin interpretarlo.
+   * Agregar campos al JSON no exige cambiar este contrato, pero sí validar y documentar su uso en el flujo.
+   */
   readonly userContent: string;
   readonly responseSchema: Record<string, unknown>;
   readonly signal: AbortSignal;
