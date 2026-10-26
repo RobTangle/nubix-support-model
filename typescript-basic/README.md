@@ -337,3 +337,5 @@ Las regex son señales, no un juez semántico. La revisión humana decide si un 
 La CLI live termina después de escribir los reportes y plantillas: no queda esperando a un revisor. La flecha hacia **HUMANO** representa el siguiente paso del trabajo, que hacés editando los archivos. Luego ejecutás los comandos offline. Un estado `pending_human_review` indica que faltan esas calificaciones; no dispara una request a otro modelo.
 
 `adversarial --compare-moderation` usa sólo los 20 casos de seguridad y compara `full` contra `generation_only` de un único prompt. Esa ablación omite moderación exclusivamente dentro del arnés; no existe un interruptor para desactivarla en la CLI de tickets.
+
+Para evaluar la política de phishing, consultá el [ejercicio guiado v3/v4](../docs/phishing-evaluation-guide.md): preparación, revisión humana, límites de comparación y mapa de archivos. `basic-v4` parte de la v3 del usuario; no cambia el default ni demuestra por sí sola una mejora. Las comparaciones con distinto manual/moderación se rechazan antes de iniciar llamadas.

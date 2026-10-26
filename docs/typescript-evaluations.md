@@ -1,6 +1,6 @@
 # Evaluar Nubbix en TypeScript
 
-Las evaluaciones responden preguntas distintas de los tests: ¿clasifica bien este modelo con este prompt?, ¿la respuesta es útil y respeta el manual?, ¿la moderación detiene ataques sin rechazar consultas legítimas? Los tests offline comprueban que el software aplica sus contratos y controles. Una corrida con proveedor simulado se identifica como `fake` y no habilita recomendar un prompt. Todavía no hay resultados live ni un ganador demostrado en este repositorio.
+Las evaluaciones responden preguntas distintas de los tests: ¿clasifica bien este modelo con este prompt?, ¿la respuesta es útil y respeta el manual?, ¿la moderación detiene ataques sin rechazar consultas legítimas? Los tests offline comprueban que el software aplica sus contratos y controles. Una corrida con proveedor simulado se identifica como `fake` y no habilita recomendar un prompt. Las corridas live locales se conservan en SQLite/reportes; no hay un ganador demostrado sin revisar su evidencia.
 
 ## Quién hace cada revisión y cuándo hay requests al LLM
 
@@ -18,11 +18,13 @@ Las evaluaciones responden preguntas distintas de los tests: ¿clasifica bien es
 
 En la app, agregar una acción que sugiere revisión humana tampoco ejecuta una revisión: sólo deja una sugerencia para soporte. En las evals, la CLI live guarda los resultados y termina; después vos leés y completás los JSONL. Los comandos offline consumen esos archivos sin llamar a otro LLM ni esperar una persona en tiempo real. Los [cuatro diagramas del README](../typescript-basic/README.md#diagramas-del-procesamiento-de-tickets) distinguen requests, código y personas por texto y color.
 
+Para practicar con las políticas nuevas, seguí el [ejercicio guiado de phishing v3/v4](phishing-evaluation-guide.md), que distingue comparación de generación de contraste entre políticas.
+
 ## Preparar y ejecutar
 
 También podés ejecutar y revisar desde **Nubbix Flow Lab**: `npm run web` arranca LIVE; `npm run web:demo` es una simulación explícita. En la sección **Evaluaciones** elegí proveedor, operación y versión. `compare` exige desarrollo, permite dos o más versiones y un baseline, e intercala las variantes. `adversarial` admite comparar moderación, con el mismo presupuesto compartido. Se permiten un job activo y las mismas llamadas secuenciales de la CLI.
 
-Las versiones y etiquetas vienen de `src/prompting/prompt-registry.yaml`. Consultalas sin consumir API con `node dist/eval-cli.js --list-prompts`. Para crear una variante nueva, seguí la [guía de versiones](prompt-versions.md): no se editan listas en TypeScript ni HTML. Sin `--prompt-versions`, `compare` ejecuta todas las registradas; agregar una versión aumenta casos y consumo previsto dentro del mismo límite USD 5.
+Las versiones y etiquetas vienen de `src/prompting/prompt-registry.yaml`. Consultalas sin consumir API con `node dist/eval-cli.js --list-prompts`. Para crear una variante nueva, seguí la [guía de versiones](prompt-versions.md): no se editan listas en TypeScript ni HTML. Sin `--prompt-versions`, `compare` selecciona todas las registradas; si tienen distinto manual/moderación, se rechaza antes de consumir API. Elegí explícitamente variantes compatibles, por ejemplo v1/v2. Si todas son compatibles, agregar una versión aumenta casos y consumo previsto dentro del mismo límite USD 5.
 
 Cada entrada usa recursos propios en `src/prompting/versions/<id>/`. Copiar v2 para crear v3 permite editar instrucciones, ejemplos, manual o seguridad sin afectar versiones anteriores. Para conservar un experimento evaluado, mantené su carpeta y creá otro ID; Git aporta el historial y los hashes detectan modificaciones. No hay bloqueo de edición ni un sistema de promociones.
 
