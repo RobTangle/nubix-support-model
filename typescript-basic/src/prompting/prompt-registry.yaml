@@ -23,3 +23,15 @@ prompts:
     context: versions/basic-v2/context.yaml
     safety: versions/basic-v2/safety.yaml
     examples: versions/basic-v2/examples.yaml
+  - id: basic-v3
+    label: basic-v3 · contexto + cuatro ejemplos + seguridad y manual reforzado
+    system: versions/basic-v3/system.yaml
+    context: versions/basic-v3/context.yaml
+    safety: versions/basic-v3/safety.yaml
+    examples: versions/basic-v3/examples.yaml
+  - id: basic-v4
+    label: basic-v4 · política de phishing y exposición de credenciales
+    system: versions/basic-v4/system.yaml
+    context: versions/basic-v4/context.yaml
+    safety: versions/basic-v4/safety.yaml
+    examples: versions/basic-v4/examples.yaml

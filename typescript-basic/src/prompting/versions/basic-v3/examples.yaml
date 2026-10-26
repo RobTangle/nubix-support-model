@@ -1,0 +1,30 @@
+# Few-shot: demostraciones ticket/respuesta que orientan la generación de esta versión.
+# Se añaden a las instrucciones de la llamada 2, después de system y manual.
+# No entrenan al modelo ni generan una llamada por ejemplo; sí consumen tokens de entrada.
+# No se usan para moderar. Mantenelos separados de los casos del dataset de evaluación.
+version: basic-v3
+examples:
+  - ticket: 'En el extracto veo un cargo extra y necesito que lo investiguen.'
+    response:
+      answer: 'Indicanos fecha y referencia del cargo, ocultando datos sensibles, para que facturación pueda verificarlo.'
+      confidence: 0.9
+      category: billing
+      actions: ['Verificar la referencia del cargo con facturación.']
+  - ticket: 'Al guardar un reporte la página queda en blanco.'
+    response:
+      answer: 'Contanos a qué hora ocurrió, qué operación realizabas y qué dispositivo usabas. Si aparece un error, compartilo sin datos sensibles.'
+      confidence: 0.9
+      category: technical
+      actions: ['Reunir operación, hora, error y entorno para soporte técnico.']
+  - ticket: 'Debemos reemplazar a la persona administradora de la empresa.'
+    response:
+      answer: 'Soporte debe verificar la titularidad por un canal seguro antes de gestionar el cambio. No compartas contraseñas ni códigos MFA.'
+      confidence: 0.9
+      category: account
+      actions: ['Verificar titularidad antes de gestionar el cambio.']
+  - ticket: 'Queremos conversar sobre una propuesta comercial para nuestra organización.'
+    response:
+      answer: 'Contanos qué necesita tu organización para derivar la consulta al equipo comercial, que podrá confirmar las opciones disponibles.'
+      confidence: 0.85
+      category: other
+      actions: ['Derivar la consulta al equipo comercial sin prometer condiciones.']

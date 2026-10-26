@@ -11,6 +11,7 @@ import { promptVersionSchema } from '../prompting/prompt-contracts.js';
 import type { PromptRegistry } from '../prompting/prompt-registry.js';
 import type { WebProvider } from '../web/contracts.js';
 import { LabStore } from './storage.js';
+import { assertComparablePrompts } from '../evals/comparison-context.js';
 
 export const evaluationInputSchema = z
   .strictObject({
@@ -75,6 +76,8 @@ export class LabEvaluationService {
       (selected.operation === 'compare' && (versions.length < 2 || !versions.includes(baseline)))
     )
       throw new AppError('invalid_arguments');
+    if (selected.operation === 'compare')
+      assertComparablePrompts(versions.map((version) => this.options.registry.get(version, true)));
     const input: EvaluationInput = {
       ...selected,
       promptVersions: versions,

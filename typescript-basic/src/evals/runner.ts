@@ -18,6 +18,7 @@ import type { EvaluationDataset } from './data.js';
 import { ReportWriter } from './storage.js';
 import { summarize } from './metrics.js';
 import { installedPackageVersion } from './package-version.js';
+import { assertComparablePrompts } from './comparison-context.js';
 import type { EvaluationReport, EvaluationTarget, Provenance } from './types.js';
 
 /** Condiciones con las que la factory debe construir el asistente de una variante del experimento. */
@@ -89,6 +90,8 @@ export class EvalRunner {
         !run.promptVersions.includes(run.baselinePromptVersion))
     )
       throw new AppError('invalid_arguments');
+    if (run.promptVersions.length > 1)
+      assertComparablePrompts(run.promptVersions.map((version) => registry.get(version, true)));
     const dataset = this.options.dataset ?? (await loadDataset());
     const cases =
       run.suite === 'adversarial'

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AppError } from '../../errors.js';
 import {
   labRunDetailSchema,
   labRunListSchema,
@@ -159,6 +160,13 @@ export class LabApi {
         },
       });
       if (!response.ok) {
+        if (response.status === 400) {
+          const body: unknown = await response.json().catch(() => null);
+          const incompatible = z
+            .object({ error: z.object({ code: z.literal('incompatible_prompts') }) })
+            .safeParse(body);
+          if (incompatible.success) throw new AppError('incompatible_prompts');
+        }
         await response.body?.cancel().catch(() => {});
         throw new Error(
           response.status === 429
@@ -169,6 +177,8 @@ export class LabApi {
       if (response.status === 204) return null;
       return await response.json();
     } catch (error) {
+      if (error instanceof AppError && error.code === 'incompatible_prompts')
+        throw new Error(error.message);
       if (init.signal?.aborted) throw new DOMException('Lectura cancelada.', 'AbortError');
       if (error instanceof Error && error.message.startsWith('El servidor')) throw error;
       throw new Error('No se pudieron leer los datos del laboratorio. Comprobá la conexión local.');

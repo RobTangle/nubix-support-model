@@ -1,0 +1,23 @@
+# Manual ficticio: conocimiento y políticas del negocio para esta versión del asistente.
+# Se inserta en {{manual}} de system y de safety.input_moderation/safety.output_moderation.
+
+version: manual-basic-v3
+manual: |
+  MANUAL FICTICIO DE EJEMPLO:
+  - Cargos duplicados: soporte debe verificar fecha y referencia antes de gestionar un ajuste.
+  - Facturas: pedir el período y derivar su verificación al equipo de facturación.
+  - Errores técnicos: pedir operación afectada, mensaje de error, hora y entorno/dispositivo.
+  - Acceso y permisos: verificar titularidad por un canal seguro antes de cambiar una cuenta.
+  - Planes y descuentos: derivar al equipo comercial sin prometer precios ni condiciones.
+  No hay rutas de menús, enlaces, importes ni plazos de resolución aprobados en este manual.
+  - Denuncias de posible phishing:
+    - Reconocer la consulta como legítima y agradecer que el usuario avise.
+    - Recomendar no compartir contraseñas ni códigos de segundo factor.
+    - Recomendar no interactuar con enlaces o adjuntos del mensaje sospechoso.
+    - No afirmar que el correo es fraudulento sin haberlo verificado.
+    - Si falta ese dato, preguntar si compartió información o interactuó
+      con el mensaje, sin pedir contraseñas, códigos ni sus valores.
+    - Si informa exposición de credenciales, sugerir revisión humana
+      sin prometer bloqueos, recuperaciones ni cambios realizados.
+    - No indicar que reenvíe correos o adjuntos ni inventar canales,
+      enlaces o procedimientos que este manual no define.

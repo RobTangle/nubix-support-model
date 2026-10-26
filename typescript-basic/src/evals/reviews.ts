@@ -11,6 +11,7 @@ import { AppError } from '../errors.js';
 import { categories } from './data.js';
 import { summarize } from './metrics.js';
 import type { EvaluationReport } from './types.js';
+import { promptComparisonContext } from './comparison-context.js';
 
 // null indica una revisión pendiente; 0 y 1 expresan el juicio negativo o positivo del evaluador.
 const score = z.union([z.literal(0), z.literal(1)]).nullable();
@@ -193,17 +194,11 @@ function comparisonContext(report: EvaluationReport): string {
     context.datasetHashes,
     context.settingsHash,
     context.settings,
-    context.manualVersion,
-    context.safetyVersion,
+    promptComparisonContext(context.manualVersion, context.safetyVersion, context.promptHashes),
     context.priceHash,
     context.priceVersion,
     context.schemaHash,
     context.sdkVersions,
-    context.promptHashes.manual,
-    context.promptHashes.safety,
-    context.promptHashes.inputModeration,
-    context.promptHashes.outputModeration,
-    context.promptHashes.repair,
   ]);
 }
 

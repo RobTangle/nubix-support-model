@@ -30,6 +30,7 @@ export type ErrorCode =
   | 'unknown_model'
   | 'invalid_dataset'
   | 'invalid_report'
+  | 'incompatible_prompts'
   | 'invalid_review'
   | 'telemetry_error'
   | 'report_error'
@@ -41,6 +42,8 @@ const messages: Record<ErrorCode, string> = {
   unknown_model: 'El modelo no tiene una tarifa configurada.',
   invalid_dataset: 'El dataset no tiene un formato válido.',
   invalid_report: 'El reporte no es válido o no es comparable.',
+  incompatible_prompts:
+    'Las versiones tienen distinto manual o moderación. Esta comparación exige el mismo contexto: evaluá cada versión por separado para contrastar políticas diferentes. No se inició la evaluación.',
   invalid_review: 'La revisión humana no es válida para esta corrida.',
   telemetry_error: 'No se pudo registrar la telemetría.',
   report_error: 'No se pudo guardar el reporte de la prueba.',

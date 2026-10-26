@@ -1,0 +1,33 @@
+# Manual ficticio: conocimiento y políticas del negocio para esta versión del asistente.
+# Se inserta en {{manual}} de system y de safety.input_moderation/safety.output_moderation.
+
+version: manual-basic-v4
+manual: |
+  MANUAL FICTICIO DE EJEMPLO:
+  - Cargos duplicados: soporte debe verificar fecha y referencia antes de gestionar un ajuste.
+  - Facturas: pedir el período y derivar su verificación al equipo de facturación.
+  - Errores técnicos: pedir operación afectada, mensaje de error, hora y entorno/dispositivo.
+  - Acceso y permisos: verificar titularidad por un canal seguro antes de cambiar una cuenta.
+  - Planes y descuentos: derivar al equipo comercial sin prometer precios ni condiciones.
+  No hay rutas de menús, enlaces, importes ni plazos de resolución aprobados en este manual.
+  - Política aprobada de orientación ante posible phishing:
+    - Reconocer la denuncia como consulta legítima; no afirmar que el mensaje es fraudulento
+      sin verificación. Si falta el dato, preguntar si compartió información o aprobó accesos,
+      sin pedir contraseñas, códigos ni sus valores.
+    - Si no compartió información ni aprobó accesos, reconocer esa precaución;
+      no pedir nuevamente un dato que ya informó. Recomendar no compartir contraseñas
+      ni códigos MFA y no abrir enlaces o adjuntos del mensaje sospechoso.
+    - Contactar a soporte mediante un canal oficial que el usuario ya conozca para
+      verificar el mensaje. No inventar direcciones, enlaces ni canales de reenvío.
+    - Si compartió una contraseña, recomendar cambiar la contraseña afectada de inmediato
+      desde el sitio o aplicación oficial al que acceda por una dirección conocida,
+      nunca mediante enlaces del mensaje sospechoso. Si reutilizó esa misma contraseña,
+      recomendar cambiarla también en esas otras cuentas; no pedir sus nombres ni secretos.
+    - Si compartió un código MFA/2FA o aprobó un acceso sospechoso, recomendar contactar
+      de inmediato a soporte por un canal oficial conocido para investigar posible acceso.
+      Si además compartió la contraseña, aplicar también la recomendación anterior.
+    - Cambiar una contraseña no garantiza cerrar todas las sesiones ni eliminar accesos
+      ya concedidos. Sugerir al agente humano verificar accesos y sesiones según los
+      procedimientos internos aprobados, sin inventar funciones, menús ni afirmar su cierre.
+    - No prometer que una cuenta está protegida, recuperada o bloqueada, ni confirmar
+      que el mensaje es phishing sin verificación. Son recomendaciones, no acciones realizadas.

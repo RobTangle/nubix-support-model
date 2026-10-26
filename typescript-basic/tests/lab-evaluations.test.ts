@@ -19,6 +19,8 @@ import { extendedRegistry } from './fixtures/extended-registry.js';
 const input = {
   provider: 'openai',
   operation: 'compare',
+  promptVersions: ['basic-v1', 'basic-v2'],
+  baselinePromptVersion: 'basic-v1',
   promptVersion: 'basic-v1',
   split: 'dev',
   compareModeration: false,

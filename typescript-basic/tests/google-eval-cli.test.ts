@@ -62,7 +62,12 @@ async function run(args: string[], overrides: NodeJS.ProcessEnv = {}) {
 // Los reportes temporales dicen live por recorrer ese borde, pero NO son evidencia del modelo.
 for (const scenario of [
   { name: 'run', args: ['run', '--split', 'dev'], cases: 60, calls: [180] },
-  { name: 'compare', args: ['compare'], cases: 60, calls: [180, 180] },
+  {
+    name: 'compare',
+    args: ['compare', '--prompt-versions', 'basic-v1,basic-v2'],
+    cases: 60,
+    calls: [180, 180],
+  },
   { name: 'adversarial', args: ['adversarial'], cases: 20, calls: [60] },
   {
     name: 'ablación',
@@ -112,8 +117,24 @@ test('Google AI eval CLI: exige su clave antes de generar reportes', async () =>
   assert.equal(result.reports.length, 0);
 });
 
+test('eval CLI: políticas distintas se rechazan sin producir reportes ni ejecutar casos', async () => {
+  const result = await run([
+    'compare',
+    '--prompt-versions',
+    'basic-v3,basic-v4',
+    '--baseline-prompt',
+    'basic-v3',
+  ]);
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.equal(JSON.parse(result.stderr).error.code, 'incompatible_prompts');
+  assert.equal(result.reports.length, 0);
+});
+
 test('Google AI eval CLI: presupuesto agotado preserva checkpoints y casos pendientes', async () => {
-  const result = await run(['compare'], { NUBBIX_EVAL_BUDGET_USD: '0.000001' });
+  const result = await run(['compare', '--prompt-versions', 'basic-v1,basic-v2'], {
+    NUBBIX_EVAL_BUDGET_USD: '0.000001',
+  });
   assert.equal(result.status, 1, result.stderr);
   assert.equal(result.reports.length, 2);
   assert.equal(
